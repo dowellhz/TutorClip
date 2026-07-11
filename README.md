@@ -129,13 +129,15 @@ TutorClip does not store the API key in Keychain.
 
 ## Release Packaging And Apple Notarization
 
-Build a hardened-runtime app signed with Developer ID and create a signed drag-to-Applications installer:
+Build a hardened-runtime app signed with Developer ID and create a signed DMG containing a native installer. The installer finds running TutorClip instances by bundle identifier, requests a normal quit, offers a confirmed force quit only after timeout, replaces the existing app, verifies its signature, and relaunches it:
 
 ```sh
 make package-dmg
 ```
 
 The installer is written to `.build/release/TutorClip.dmg`.
+
+First installs default to `~/Applications` without an administrator prompt. Existing installations keep their current location; replacing `/Applications/TutorClip.app` uses the standard macOS administrator authorization dialog. Drag-to-Applications remains available as a manual fallback.
 
 After storing Apple notary credentials in the Keychain profile named `TutorClip`, submit, wait, staple, and validate with:
 

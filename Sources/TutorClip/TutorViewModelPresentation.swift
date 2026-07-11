@@ -35,12 +35,27 @@ extension TutorViewModel {
         }
         let lines = session.ocrDocument.lines
         guard !isLoadingOCR, !lines.isEmpty else { return nil }
-        let average = lines.map { Double($0.confidence) }.reduce(0, +) / Double(lines.count)
-        let lowCount = lines.filter { $0.confidence < 0.45 }.count
-        guard average < 0.66 || lowCount >= max(2, lines.count / 5) else { return nil }
+        guard OCRConfidenceAssessment.shouldWarn(confidences: lines.map(\.confidence)) else { return nil }
         return text(
-            "OCR 置信度偏低，已保留原文；可直接编辑题目后再讲解。",
-            "OCR confidence is low. The original text was kept; edit the question before explaining if needed."
+            "多处文字识别不确定，已保留原文；请对照截图检查后再讲解。",
+            "Several OCR lines are uncertain. The original text was kept; check it against the screenshot before explaining."
         )
+    }
+}
+
+enum OCRConfidenceAssessment {
+    static func shouldWarn(confidences: [Float]) -> Bool {
+        guard !confidences.isEmpty else { return false }
+        let sorted = confidences.sorted()
+        let median: Float
+        if sorted.count.isMultiple(of: 2) {
+            let upper = sorted.count / 2
+            median = (sorted[upper - 1] + sorted[upper]) / 2
+        } else {
+            median = sorted[sorted.count / 2]
+        }
+        let lowCount = sorted.filter { $0 < 0.45 }.count
+        let lowCountLimit = max(2, Int(ceil(Double(sorted.count) * 0.25)))
+        return median < 0.50 || lowCount >= lowCountLimit
     }
 }

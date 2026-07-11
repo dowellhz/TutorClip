@@ -4,6 +4,17 @@ import XCTest
 @testable import TutorClip
 
 final class CoreBehaviorTests: XCTestCase {
+    func testOCRConfidenceWarningIgnoresFewLowTitleLines() {
+        let normalDocument = Array(repeating: Float(0.60), count: 53) + [0.24, 0.31]
+        XCTAssertFalse(OCRConfidenceAssessment.shouldWarn(confidences: normalDocument))
+
+        let broadlyUncertain = Array(repeating: Float(0.58), count: 10) + Array(repeating: Float(0.32), count: 5)
+        XCTAssertTrue(OCRConfidenceAssessment.shouldWarn(confidences: broadlyUncertain))
+
+        let lowMedian = Array(repeating: Float(0.42), count: 8)
+        XCTAssertTrue(OCRConfidenceAssessment.shouldWarn(confidences: lowMedian))
+    }
+
     func testOnboardingStateDefaultsToIncompleteAndPersistsCompletion() throws {
         let fresh = try JSONDecoder.tutorClip.decode(AppSettings.self, from: Data("{}".utf8))
         XCTAssertFalse(fresh.hasCompletedOnboarding)

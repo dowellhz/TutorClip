@@ -5,6 +5,7 @@ struct TutorWindowView: View {
     @State private var sourceTextEditing = false
     @State private var needsReviewDockExpanded = false
     @State private var needsReviewDockHeight: CGFloat = 0
+    private let chatContentEndID = "chat-content-end"
     private let chatBottomID = "chat-bottom"
     private let panelCornerRadius: CGFloat = 16
 
@@ -133,6 +134,9 @@ struct TutorWindowView: View {
                                 timelineView(entry)
                             }
                             Color.clear
+                                .frame(height: 1)
+                                .id(chatContentEndID)
+                            Color.clear
                                 .frame(height: needsReviewDockExpanded ? needsReviewDockHeight + 28 : 54)
                                 .id(chatBottomID)
                         }
@@ -151,10 +155,10 @@ struct TutorWindowView: View {
                 }
                 .onPreferenceChange(LearningDockHeightKey.self) { needsReviewDockHeight = $0 }
                 .onChange(of: chatScrollSignal) {
-                    scrollChatToBottom(proxy)
+                    scrollChatToVisibleEnd(proxy)
                 }
                 .onAppear {
-                    scrollChatToBottom(proxy, animated: false)
+                    scrollChatToVisibleEnd(proxy, animated: false)
                 }
                 .onChange(of: viewModel.session.learningMetadata.needsReviewFlow.stage) {
                     withAnimation(.easeOut(duration: 0.18)) {
@@ -167,10 +171,15 @@ struct TutorWindowView: View {
                     }
                 }
                 .onChange(of: viewModel.isStreaming) {
-                    guard viewModel.isStreaming, shouldMinimizeLearningDockWhileStreaming else { return }
-                    withAnimation(.easeOut(duration: 0.18)) {
-                        needsReviewDockExpanded = false
+                    if viewModel.isStreaming && shouldMinimizeLearningDockWhileStreaming {
+                        withAnimation(.easeOut(duration: 0.18)) {
+                            needsReviewDockExpanded = false
+                        }
                     }
+                    scrollChatToVisibleEnd(proxy, animated: false, afterLayoutDelay: 0.22)
+                }
+                .onChange(of: needsReviewDockExpanded) {
+                    scrollChatToVisibleEnd(proxy, animated: false, afterLayoutDelay: 0.22)
                 }
             }
 
@@ -353,14 +362,19 @@ struct TutorWindowView: View {
         return "\(viewModel.session.messages.count)-\(last.id.uuidString)-\(viewModel.isStreaming)"
     }
 
-    private func scrollChatToBottom(_ proxy: ScrollViewProxy, animated: Bool = true) {
-        DispatchQueue.main.async {
+    private func scrollChatToVisibleEnd(
+        _ proxy: ScrollViewProxy,
+        animated: Bool = true,
+        afterLayoutDelay delay: TimeInterval = 0
+    ) {
+        let targetID = needsReviewDockExpanded ? chatBottomID : chatContentEndID
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
             if animated && !viewModel.isStreaming {
                 withAnimation(.easeOut(duration: 0.16)) {
-                    proxy.scrollTo(chatBottomID, anchor: .bottom)
+                    proxy.scrollTo(targetID, anchor: .bottom)
                 }
             } else {
-                proxy.scrollTo(chatBottomID, anchor: .bottom)
+                proxy.scrollTo(targetID, anchor: .bottom)
             }
         }
     }
