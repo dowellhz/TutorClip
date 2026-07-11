@@ -47,6 +47,7 @@ struct AppSettings: Codable, Equatable {
     var deepseekBaseURL: String = "https://api.deepseek.com"
     var deepseekModel: String = "deepseek-chat"
     var temperature: Double = 0.3
+    var hasCompletedOnboarding: Bool = false
 
     init() {}
 
@@ -61,6 +62,7 @@ struct AppSettings: Codable, Equatable {
         deepseekBaseURL = try values.decodeIfPresent(String.self, forKey: .deepseekBaseURL) ?? deepseekBaseURL
         deepseekModel = try values.decodeIfPresent(String.self, forKey: .deepseekModel) ?? deepseekModel
         temperature = try values.decodeIfPresent(Double.self, forKey: .temperature) ?? temperature
+        hasCompletedOnboarding = try values.decodeIfPresent(Bool.self, forKey: .hasCompletedOnboarding) ?? false
     }
 
     var shortcutDisplay: String {

@@ -15,6 +15,7 @@ final class AppCoordinator: ObservableObject {
     private var captureController: CaptureOverlayController?
     private var tutorWindowController: TutorWindowController?
     private var settingsWindowController: SettingsWindowController?
+    private var onboardingWindowController: OnboardingWindowController?
     private var historyWindowController: HistoryWindowController?
     private var knowledgeMapWindowController: KnowledgeMapWindowController?
     private var launchMarkerTimer: Timer?
@@ -33,6 +34,9 @@ final class AppCoordinator: ObservableObject {
         settingsStore.shortcutRegistrationResult = shortcutManager?.register() ?? .unregistered
         RuntimeLog.write("shortcut-register \(settingsStore.shortcutRegistrationResult.isRegistered) \(settingsStore.shortcutRegistrationResult.message)")
         handleLaunchMarkers()
+        if !settingsStore.settings.hasCompletedOnboarding {
+            DispatchQueue.main.async { [weak self] in self?.showOnboarding() }
+        }
         launchMarkerTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.handleLaunchMarkers() }
         }
@@ -142,10 +146,43 @@ final class AppCoordinator: ObservableObject {
             self?.settingsStore.shortcutRegistrationResult = self?.shortcutManager?.register() ?? .unregistered
             self?.menuBarController?.refresh()
         }
-        settingsWindowController = SettingsWindowController(viewModel: viewModel) { [weak self] in
-            self?.settingsWindowController = nil
-        }
+        settingsWindowController = SettingsWindowController(
+            viewModel: viewModel,
+            onRestartOnboarding: { [weak self] in
+                self?.settingsWindowController?.requestClose()
+                self?.showOnboarding()
+            },
+            onClose: { [weak self] in self?.settingsWindowController = nil }
+        )
         settingsWindowController?.show()
+    }
+
+    func showOnboarding() {
+        onboardingWindowController?.close()
+        let viewModel = makeSettingsViewModel()
+        onboardingWindowController = OnboardingWindowController(
+            viewModel: viewModel,
+            onFinish: { [weak self] in
+                self?.onboardingWindowController?.close()
+                self?.onboardingWindowController = nil
+                self?.menuBarController?.refresh()
+            },
+            onWindowClosed: { [weak self] in
+                self?.onboardingWindowController = nil
+            }
+        )
+        onboardingWindowController?.show()
+    }
+
+    private func makeSettingsViewModel() -> SettingsViewModel {
+        SettingsViewModel(settingsStore: settingsStore, configLoader: configLoader, historyStore: historyStore) { [weak self] in
+            self?.shortcutManager?.unregister()
+            self?.shortcutManager = ShortcutManager(settings: self?.settingsStore.settings ?? AppSettings()) { [weak self] in
+                Task { @MainActor in self?.beginCapture() }
+            }
+            self?.settingsStore.shortcutRegistrationResult = self?.shortcutManager?.register() ?? .unregistered
+            self?.menuBarController?.refresh()
+        }
     }
 
     func showHistory() {

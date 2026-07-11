@@ -85,6 +85,21 @@ final class SettingsViewModel: ObservableObject {
         configLoader.configFilePath()
     }
 
+    var hasConfiguredAPIKey: Bool {
+        !temporaryAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || keySource != "none"
+    }
+
+    func completeOnboarding(saveKeyLocally: Bool) -> Bool {
+        configLoader.temporaryAPIKey = temporaryAPIKey
+        if saveKeyLocally, !temporaryAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            persistAPIKeyToConfig()
+            guard !saveStatusIsError else { return false }
+        }
+        settings.hasCompletedOnboarding = true
+        save()
+        return !saveStatusIsError
+    }
+
     func persistAPIKeyToConfig() {
         configLoader.temporaryAPIKey = temporaryAPIKey
         do {
@@ -231,4 +246,3 @@ final class SettingsViewModel: ObservableObject {
         }
     }
 }
-

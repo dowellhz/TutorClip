@@ -28,7 +28,7 @@ final class MenuBarController: NSObject {
         recentItem.tag = recentSessionsTag
         menu.addItem(recentItem)
         menu.addItem(NSMenuItem(title: language.text("知识地图", "Knowledge Map"), action: #selector(knowledgeMap), keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: language.text("设置", "Settings"), action: #selector(settings), keyEquivalent: ","))
+        menu.addItem(NSMenuItem(title: language.text("帮助与设置", "Help & Settings"), action: #selector(settings), keyEquivalent: ","))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: language.text("退出 TutorClip", "Quit TutorClip"), action: #selector(quit), keyEquivalent: "q"))
         for item in menu.items {

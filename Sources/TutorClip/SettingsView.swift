@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject var viewModel: SettingsViewModel
     var onClose: () -> Void = {}
+    var onRestartOnboarding: () -> Void = {}
 
     private let panelBackground = Color(nsColor: .windowBackgroundColor)
     private let surface = Color.primary.opacity(0.045)
@@ -14,6 +15,7 @@ struct SettingsView: View {
             header
             ScrollView {
                 VStack(spacing: 12) {
+                    helpSection
                     permissionsSection
                     shortcutSection
                     deepSeekSection
@@ -35,7 +37,7 @@ struct SettingsView: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            Text(language.text("设置", "Settings"))
+            Text(language.text("帮助与设置", "Help & Settings"))
                 .font(.system(size: 18, weight: .semibold))
             Spacer()
             statusPill(viewModel.keySource, color: .teal)
@@ -48,6 +50,23 @@ struct SettingsView: View {
         .background(Color.primary.opacity(0.02))
         .overlay(alignment: .bottom) {
             Rectangle().fill(divider).frame(height: 1)
+        }
+    }
+
+    private var helpSection: some View {
+        section(language.text("快速开始", "Quick Start")) {
+            Text(language.text(
+                "按 \(viewModel.settings.shortcutDisplay) 框选 SAT 题目；Esc 取消截图。OCR 在本机完成，随后 DeepSeek 会用中文讲解。",
+                "Press \(viewModel.settings.shortcutDisplay) to select an SAT question; Esc cancels capture. OCR runs locally, then DeepSeek explains it."
+            ))
+            .font(.system(size: 13))
+            .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                chromeButton(language.text("重新运行首次设置", "Run Setup Again"), action: onRestartOnboarding)
+                Text(language.text("适合重新检查权限、快捷键和 Token。", "Recheck permissions, shortcut, and token."))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+            }
         }
     }
 

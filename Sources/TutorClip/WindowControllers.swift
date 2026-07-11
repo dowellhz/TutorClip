@@ -191,11 +191,56 @@ private final class TutorPanel: NSPanel {
 }
 
 @MainActor
+final class OnboardingWindowController: NSWindowController {
+    init(viewModel: SettingsViewModel, onFinish: @escaping () -> Void, onWindowClosed: @escaping () -> Void) {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 700, height: 570),
+            styleMask: [.titled, .closable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "TutorClip Setup"
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.isMovableByWindowBackground = true
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: OnboardingView(viewModel: viewModel, onFinish: onFinish))
+        super.init(window: window)
+        let delegate = ClosureWindowDelegate(onClose: onWindowClosed)
+        window.delegate = delegate
+        retainedDelegate = delegate
+    }
+
+    private var retainedDelegate: NSWindowDelegate?
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func show() {
+        window?.center()
+        window?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+}
+
+private final class ClosureWindowDelegate: NSObject, NSWindowDelegate {
+    let onClose: () -> Void
+
+    init(onClose: @escaping () -> Void) {
+        self.onClose = onClose
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        onClose()
+    }
+}
+
 final class SettingsWindowController: NSWindowController {
     private let onClose: () -> Void
     private let viewModel: SettingsViewModel
 
-    init(viewModel: SettingsViewModel, onClose: @escaping () -> Void = {}) {
+    init(viewModel: SettingsViewModel, onRestartOnboarding: @escaping () -> Void = {}, onClose: @escaping () -> Void = {}) {
         self.viewModel = viewModel
         self.onClose = onClose
         let window = SettingsPanel(
@@ -204,7 +249,7 @@ final class SettingsWindowController: NSWindowController {
             backing: .buffered,
             defer: false
         )
-        window.title = "TutorClip Settings"
+        window.title = "TutorClip Help & Settings"
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.isMovableByWindowBackground = true
@@ -219,9 +264,11 @@ final class SettingsWindowController: NSWindowController {
         window.standardWindowButton(.zoomButton)?.isHidden = true
         super.init(window: window)
         window.delegate = self
-        window.contentView = NSHostingView(rootView: SettingsView(viewModel: viewModel) { [weak self] in
-            self?.requestClose()
-        })
+        window.contentView = NSHostingView(rootView: SettingsView(
+            viewModel: viewModel,
+            onClose: { [weak self] in self?.requestClose() },
+            onRestartOnboarding: onRestartOnboarding
+        ))
     }
 
     required init?(coder: NSCoder) {

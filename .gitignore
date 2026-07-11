@@ -18,3 +18,6 @@ config.json
 *.jpeg
 *.heic
 *.tiff
+
+# Public application icon assets are the only committed raster images.
+!Resources/Assets.xcassets/AppIcon.appiconset/*.png

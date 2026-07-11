@@ -9,7 +9,7 @@ xcode_app_dir=".xcode-derived/Build/Products/Debug/${app_name}.app"
 
 echo "Checking source file lengths..."
 for file in $(find Sources Resources Scripts TutorClip.xcodeproj -type f \
-  ! -name '*.p12' \
+  \( -name '*.swift' -o -name '*.sh' -o -name '*.plist' -o -name '*.json' -o -name 'project.pbxproj' \) \
   ! -path '*/xcuserdata/*' \
   ! -path '*/project.xcworkspace/*' \
   | sort) AGENTS.md README.md VERIFY.md Makefile; do

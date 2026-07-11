@@ -4,6 +4,19 @@ import XCTest
 @testable import TutorClip
 
 final class CoreBehaviorTests: XCTestCase {
+    func testOnboardingStateDefaultsToIncompleteAndPersistsCompletion() throws {
+        let fresh = try JSONDecoder.tutorClip.decode(AppSettings.self, from: Data("{}".utf8))
+        XCTAssertFalse(fresh.hasCompletedOnboarding)
+
+        var completed = fresh
+        completed.hasCompletedOnboarding = true
+        let restored = try JSONDecoder.tutorClip.decode(
+            AppSettings.self,
+            from: JSONEncoder.tutorClip.encode(completed)
+        )
+        XCTAssertTrue(restored.hasCompletedOnboarding)
+    }
+
     func testStructuredTableIsSentAsProtectedTabSeparatedContext() {
         var document = OCRDocument.empty()
         document.fullText = "A small SAT table"
