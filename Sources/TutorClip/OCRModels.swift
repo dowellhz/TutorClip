@@ -10,10 +10,41 @@ struct OCRDocument: Codable, Equatable {
     var blocks: [OCRBlock]
     var lines: [OCRLine]
     var tokens: [OCRToken]
+    var tables: [OCRTable]? = nil
+    var documentTitle: OCRDocumentTitle? = nil
+    var paragraphs: [OCRParagraph]? = nil
 
     static func empty() -> OCRDocument {
-        OCRDocument(id: UUID(), fullText: "", editedText: "", detectedLanguage: nil, createdAt: Date(), blocks: [], lines: [], tokens: [])
+        OCRDocument(id: UUID(), fullText: "", editedText: "", detectedLanguage: nil, createdAt: Date(), blocks: [], lines: [], tokens: [], tables: [])
     }
+
+    var structuredTables: [OCRTable] { tables ?? [] }
+}
+
+struct OCRParagraph: Codable, Equatable {
+    var text: String
+    var boundingBox: CodableRect
+}
+
+struct OCRDocumentTitle: Codable, Equatable {
+    var text: String
+    var boundingBox: CodableRect
+}
+
+struct OCRTable: Codable, Equatable, Identifiable {
+    var id: UUID
+    var boundingBox: CodableRect
+    var rows: [[OCRTableCell]]
+}
+
+struct OCRTableCell: Codable, Equatable, Identifiable {
+    var id: UUID
+    var text: String
+    var rowStart: Int
+    var rowEnd: Int
+    var columnStart: Int
+    var columnEnd: Int
+    var boundingBox: CodableRect
 }
 
 struct OCRBlock: Codable, Equatable, Identifiable {
@@ -37,6 +68,7 @@ struct OCRToken: Codable, Equatable, Identifiable {
     var text: String
     var boundingBox: CodableRect
     var confidence: Float
+    var isLikelyUnderlined: Bool?
 }
 
 struct CodableRect: Codable, Equatable {

@@ -97,6 +97,16 @@ struct SettingsView: View {
                 SecureField(language.text("仅保存在内存", "Kept only in memory"), text: $viewModel.temporaryAPIKey)
                     .textFieldStyle(.plain)
             }
+            HStack(spacing: 8) {
+                chromeButton(language.text("保存到本地配置", "Save to Local Config")) { viewModel.persistAPIKeyToConfig() }
+                    .disabled(viewModel.temporaryAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                chromeButton(language.text("删除本地 Key", "Remove Local Key")) { viewModel.removeAPIKeyFromConfig() }
+                Text(viewModel.configPath())
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
             labeledField("Base URL") {
                 TextField("https://api.deepseek.com", text: $viewModel.settings.deepseekBaseURL)
                     .textFieldStyle(.plain)

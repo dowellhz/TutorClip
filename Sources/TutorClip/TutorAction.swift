@@ -9,6 +9,7 @@ enum TutorAction: String, Codable, CaseIterable {
     case grammar
     case practiceSimilar
     case customQuestion
+    case guidedLearning
 
     static let selectedTextActions: [TutorAction] = [.translateSelection, .vocabulary]
     static let sourceLeadingActions: [TutorAction] = [.vocabulary, .grammar]
@@ -30,6 +31,7 @@ enum TutorAction: String, Codable, CaseIterable {
         case .grammar: return language.text("解析文章", "Analyze")
         case .practiceSimilar: return language.text("再练一题", "Practice")
         case .customQuestion: return language.text("提问", "Ask")
+        case .guidedLearning: return language.text("引导学习", "Guided Learning")
         }
     }
 }

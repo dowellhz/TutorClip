@@ -13,38 +13,23 @@ final class OCRService {
         let cgImage = await imageProcessor.prepare(sourceImage)
         guard !Task.isCancelled else { return OCRDocument.empty() }
         RuntimeLog.write("ocr-input-pixels \(cgImage.width)x\(cgImage.height)")
-        let operation = OCRRecognitionOperation()
-
-        return await withTaskCancellationHandler {
-            await withCheckedContinuation { continuation in
-                let request = VNRecognizeTextRequest { [layoutService] request, _ in
-                    let observations = request.results as? [VNRecognizedTextObservation] ?? []
-                    let document = layoutService.makeDocument(observations: observations, language: language)
-                    operation.complete(with: document)
-                }
-
-                request.recognitionLevel = .accurate
-                request.usesLanguageCorrection = true
-                let languages = language.recognitionLanguages
-                if !languages.isEmpty {
-                    request.recognitionLanguages = languages
-                }
-
-                guard operation.install(continuation: continuation, request: request) else {
-                    continuation.resume(returning: OCRDocument.empty())
-                    return
-                }
-                let handler = VNImageRequestHandler(cgImage: cgImage)
-                DispatchQueue.global(qos: .userInitiated).async {
-                    do {
-                        try handler.perform([request])
-                    } catch {
-                        operation.complete(with: OCRDocument.empty())
-                    }
-                }
-            }
-        } onCancel: {
-            operation.cancel()
+        do {
+            var request = RecognizeDocumentsRequest()
+            request.textRecognitionOptions.useLanguageCorrection = true
+            request.textRecognitionOptions.automaticallyDetectLanguage = language == .automatic
+            request.textRecognitionOptions.recognitionLanguages = language.recognitionLanguages.map(Locale.Language.init(identifier:))
+            let observations = try await request.perform(on: cgImage)
+            guard !Task.isCancelled, let observation = observations.first else { return OCRDocument.empty() }
+            var document = layoutService.makeDocument(observation: observation, language: language)
+            OCRVisualStyleDetector.detectUnderlines(in: cgImage, document: &document)
+            RuntimeLog.write("ocr-document-structure tables=\(document.structuredTables.count) lines=\(document.lines.count)")
+            return document
+        } catch is CancellationError {
+            RuntimeLog.write("ocr-document-request-cancelled")
+            return OCRDocument.empty()
+        } catch {
+            RuntimeLog.write("ocr-document-request-failed \(error.localizedDescription)")
+            return OCRDocument.empty()
         }
     }
 }
@@ -55,45 +40,60 @@ actor OCRImageProcessor {
     }
 }
 
-private final class OCRRecognitionOperation: @unchecked Sendable {
-    private let lock = NSLock()
-    private var continuation: CheckedContinuation<OCRDocument, Never>?
-    private var request: VNRecognizeTextRequest?
-    private var wasCancelled = false
+private enum OCRVisualStyleDetector {
+    static func detectUnderlines(in image: CGImage, document: inout OCRDocument) {
+        guard image.width > 0, image.height > 0 else { return }
+        var pixels = [UInt8](repeating: 255, count: image.width * image.height)
+        let rendered = pixels.withUnsafeMutableBytes { buffer -> Bool in
+            guard let base = buffer.baseAddress,
+                  let context = CGContext(
+                    data: base,
+                    width: image.width,
+                    height: image.height,
+                    bitsPerComponent: 8,
+                    bytesPerRow: image.width,
+                    space: CGColorSpaceCreateDeviceGray(),
+                    bitmapInfo: CGImageAlphaInfo.none.rawValue
+                  ) else { return false }
+            context.setFillColor(gray: 1, alpha: 1)
+            context.fill(CGRect(x: 0, y: 0, width: image.width, height: image.height))
+            context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+            return true
+        }
+        guard rendered else { return }
 
-    func install(
-        continuation: CheckedContinuation<OCRDocument, Never>,
-        request: VNRecognizeTextRequest
-    ) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        guard !wasCancelled else { return false }
-        self.continuation = continuation
-        self.request = request
-        return true
+        for index in document.tokens.indices {
+            let box = document.tokens[index].boundingBox.cgRect
+            document.tokens[index].isLikelyUnderlined = hasUnderline(
+                box: box,
+                pixels: pixels,
+                width: image.width,
+                height: image.height
+            )
+        }
     }
 
-    func complete(with document: OCRDocument) {
-        lock.lock()
-        let pending = continuation
-        continuation = nil
-        request = nil
-        lock.unlock()
-        pending?.resume(returning: document)
-    }
+    private static func hasUnderline(box: CGRect, pixels: [UInt8], width: Int, height: Int) -> Bool {
+        let minX = max(0, min(width - 1, Int(box.minX * Double(width))))
+        let maxX = max(minX, min(width - 1, Int(box.maxX * Double(width))))
+        let boxBottom = Int((1 - box.minY) * Double(height))
+        let tokenHeight = max(2, Int(box.height * Double(height)))
+        let minY = max(0, min(height - 1, boxBottom - max(2, tokenHeight / 8)))
+        let maxY = max(minY, min(height - 1, boxBottom + max(2, tokenHeight / 5)))
+        let requiredRun = max(4, Int(Double(maxX - minX + 1) * 0.48))
 
-    func cancel() {
-        lock.lock()
-        wasCancelled = true
-        let pending = continuation
-        let activeRequest = request
-        continuation = nil
-        request = nil
-        lock.unlock()
-
-        activeRequest?.cancel()
-        pending?.resume(returning: OCRDocument.empty())
-        RuntimeLog.write("ocr-vision-request-cancelled")
+        for y in minY...maxY {
+            var run = 0
+            for x in minX...maxX {
+                if pixels[y * width + x] < 105 {
+                    run += 1
+                    if run >= requiredRun { return true }
+                } else {
+                    run = 0
+                }
+            }
+        }
+        return false
     }
 }
 

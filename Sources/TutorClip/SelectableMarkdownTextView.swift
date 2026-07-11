@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SelectableMarkdownTextView: NSViewRepresentable {
     let markdown: String
+    let underlinedTexts: [String]
     @Binding var selectedText: String
     @Binding var selectionRect: CGRect?
 
@@ -35,6 +36,7 @@ struct SelectableMarkdownTextView: NSViewRepresentable {
         context.coordinator.textView = textView
         context.coordinator.startObservingScroll()
         context.coordinator.updateMarkdown(markdown)
+        context.coordinator.updateUnderlines(underlinedTexts)
         return scrollView
     }
 
@@ -42,6 +44,7 @@ struct SelectableMarkdownTextView: NSViewRepresentable {
         guard let textView = scrollView.documentView as? NSTextView else { return }
         textView.textContainer?.containerSize = NSSize(width: scrollView.contentSize.width, height: CGFloat.greatestFiniteMagnitude)
         context.coordinator.updateMarkdown(markdown)
+        context.coordinator.updateUnderlines(underlinedTexts)
     }
 
     func makeCoordinator() -> Coordinator {
@@ -54,6 +57,7 @@ struct SelectableMarkdownTextView: NSViewRepresentable {
         weak var textView: NSTextView?
         weak var scrollView: NSScrollView?
         private var renderedMarkdown = ""
+        private var renderedUnderlines: [String] = []
         private var scrollObserver: NSObjectProtocol?
 
         init(selectedText: Binding<String>, selectionRect: Binding<CGRect?>) {
@@ -86,6 +90,25 @@ struct SelectableMarkdownTextView: NSViewRepresentable {
             textView.textStorage?.setAttributedString(attributed)
             RuntimeLog.writeTextMetrics("question-markdown-rendered-string", textView.string)
             updateSelection()
+        }
+
+        func updateUnderlines(_ texts: [String]) {
+            guard let textView, texts != renderedUnderlines else { return }
+            renderedUnderlines = texts
+            let storage = textView.textStorage
+            let fullRange = NSRange(location: 0, length: (textView.string as NSString).length)
+            storage?.removeAttribute(.underlineStyle, range: fullRange)
+            let source = textView.string as NSString
+            for text in texts where !text.isEmpty {
+                var searchRange = NSRange(location: 0, length: source.length)
+                while searchRange.length > 0 {
+                    let found = source.range(of: text, options: [.caseInsensitive, .diacriticInsensitive], range: searchRange)
+                    guard found.location != NSNotFound else { break }
+                    storage?.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: found)
+                    let next = found.location + found.length
+                    searchRange = NSRange(location: next, length: source.length - next)
+                }
+            }
         }
 
         func textViewDidChangeSelection(_ notification: Notification) {

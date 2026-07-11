@@ -14,6 +14,7 @@ extension TutorViewModel {
         activeRequestID = nil
         inFlightTask = nil
         isStreaming = false
+        learningLoadingAction = nil
     }
 
     func isCurrentRequest(_ requestID: UUID) -> Bool {
@@ -27,5 +28,6 @@ extension TutorViewModel {
         inFlightTask?.cancel()
         inFlightTask = nil
         isStreaming = false
+        learningLoadingAction = nil
     }
 }

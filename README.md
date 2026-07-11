@@ -1,6 +1,6 @@
 # TutorClip
 
-TutorClip is a macOS 14+ personal SAT screenshot tutor.
+TutorClip is a macOS 26+ personal SAT screenshot tutor.
 
 ## Build
 
@@ -112,15 +112,46 @@ make verify
 make verify-signed
 ```
 
+Run an opt-in real Vision + DeepSeek table-question check without adding the source image to the repository:
+
+```sh
+make verify-table-ai \
+  IMAGE=/absolute/path/to/question.png \
+  EXPECTED_ANSWER=B \
+  EXPECTED_TITLE='Expected table title'
+```
+
+This external integration check is separate from `make test`, so normal tests remain deterministic and network-free.
+
 ## DeepSeek API Key
 
 TutorClip does not store the API key in Keychain.
+
+## Release Packaging And Apple Notarization
+
+Build a hardened-runtime app signed with Developer ID and create a signed drag-to-Applications installer:
+
+```sh
+make package-dmg
+```
+
+The installer is written to `.build/release/TutorClip.dmg`.
+
+After storing Apple notary credentials in the Keychain profile named `TutorClip`, submit, wait, staple, and validate with:
+
+```sh
+make notarize-dmg
+```
+
+Or run the full pipeline with `make release-notarized`. Override `NOTARY_PROFILE` or `DEVELOPER_ID` when a different configured profile or certificate is required.
 
 Key lookup order:
 
 1. `DEEPSEEK_API_KEY` environment variable
 2. `~/.tutorclip/config.json`
 3. Temporary in-app input, stored only in memory
+
+The Settings window keeps typed keys temporary by default. “Save to Local Config” explicitly writes the key to `~/.tutorclip/config.json` with owner-only `0600` permissions; “Remove Local Key” removes it again without putting the key in Keychain, SQLite, logs, or normal settings.
 
 Example config:
 
@@ -155,6 +186,19 @@ Example config:
 - Selected-text actions: Translate, Vocabulary
 - SQLite history for OCR, conversation, and learning metadata only
 - History search, open, delete, and clear
+- SAT Section, Domain, Skill, difficulty, error-reason, attempt, and review metadata
+- Distinct Got It, Review, and Mistake learning flows with visible next steps
+- Guided Review flow: separate no-answer tutor prompt, reading/math-specific gap diagnosis, persisted learning focus, focus-bound hidden-answer micro check, scaffolded practice, then independent verification; progress resumes from history
+- First-answer locking with unscored retries, answer-confidence protection, and hint-aware 1/3/7/14/30-day scheduling
+- Review question chains preserve the original, easier practice, and verification questions without mixing old chat into new AI context
+- Local underline detection restores likely underlined OCR words in the Question view and sends only structured text cues to DeepSeek
+- Event-based mastery calculation and 1/3/7/14/30-day review scheduling
+- Today Review queues with Quick 5 and Review 10 continuous sessions
+- Learning Center workspaces for due review, full history, and skill profiles
+- History filters for status, section, domain, skill, difficulty, error reason, source, and date
+- Skill mastery, accuracy, common-error, recommended-difficulty, reset, and targeted-practice actions
+- AI-generated practice labeling, recent-question diversity, and independent answer/ambiguity validation
+- Editable AI SAT classification in the tutor window
 - Settings window
 - Launch-at-login setting
 - Settings diagnostics for permissions, shortcut, API key, OCR support, history storage, and screenshot persistence
@@ -168,7 +212,7 @@ Example config:
 
 - Screenshots are never saved to disk.
 - Closing the tutor window discards the screenshot.
-- History stores OCR text, structured OCR data, conversations, selected answers, correct answers, study status, and vocabulary cards only.
+- History stores OCR text, structured OCR data, conversations, selected/correct answers, vocabulary cards, SAT skill metadata, answer attempts, and review events only.
 - API keys are not stored in Keychain, history, logs, or source code.
 
 ## Known Gaps

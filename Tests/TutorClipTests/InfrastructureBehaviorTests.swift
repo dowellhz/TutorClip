@@ -3,6 +3,64 @@ import XCTest
 @testable import TutorClip
 
 final class InfrastructureBehaviorTests: XCTestCase {
+    @MainActor
+    func testConfigLoaderPersistsAndRemovesAPIKeyWithOwnerOnlyPermissions() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tutorclip-config-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let loader = ConfigLoader(baseDirectory: directory)
+        var settings = AppSettings()
+        settings.deepseekBaseURL = "https://example.invalid"
+        settings.deepseekModel = "test-model"
+        loader.temporaryAPIKey = "synthetic-test-key"
+
+        try loader.persistTemporaryAPIKey(settings: settings)
+
+        let reloaded = ConfigLoader(baseDirectory: directory)
+        let persisted = reloaded.currentConfig(settings: AppSettings())
+        XCTAssertEqual(persisted.apiKey, "synthetic-test-key")
+        XCTAssertEqual(persisted.baseURL, "https://example.invalid")
+        XCTAssertEqual(persisted.model, "test-model")
+        XCTAssertEqual(persisted.keySource, .configFile)
+        let attributes = try FileManager.default.attributesOfItem(atPath: reloaded.configFilePath())
+        XCTAssertEqual((attributes[.posixPermissions] as? NSNumber)?.intValue, 0o600)
+
+        try reloaded.removePersistedAPIKey()
+        XCTAssertEqual(reloaded.currentConfig(settings: AppSettings()).keySource, .missing)
+    }
+
+    @MainActor
+    func testConfigLoaderRejectsEmptyPersistentAPIKey() {
+        let loader = ConfigLoader(baseDirectory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
+        XCTAssertThrowsError(try loader.persistTemporaryAPIKey(settings: AppSettings()))
+    }
+
+    func testPracticeVariationCyclesAndRetainsOnlyFiveRecentQuestions() {
+        let planner = PracticeVariationPlanner()
+        let first = planner.nextVariation()
+        let second = planner.nextVariation()
+
+        XCTAssertNotEqual(first, second)
+        XCTAssertEqual(PracticeVariationPlanner.practiceTemperature, 0.8)
+        for index in 1...6 {
+            planner.record("Question \(index)")
+        }
+        XCTAssertEqual(planner.recentQuestions, ["Question 2", "Question 3", "Question 4", "Question 5", "Question 6"])
+        XCTAssertTrue(planner.isExactDuplicate("  QUESTION   6\n"))
+    }
+
+    func testPracticeDiversityPromptIncludesVariationAndRecentQuestions() {
+        let planner = PracticeVariationPlanner()
+        planner.record("A previous generated question")
+        let variation = planner.nextVariation()
+        let prompt = planner.diversityInstruction(for: variation, retrying: true)
+
+        XCTAssertTrue(prompt.contains(variation.topic))
+        XCTAssertTrue(prompt.contains("position \(variation.answerPosition)"))
+        XCTAssertTrue(prompt.contains("A previous generated question"))
+        XCTAssertTrue(prompt.contains("previous attempt was rejected"))
+    }
+
     func testRuntimeLogWriterSerializesConcurrentAppends() throws {
         let baseURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("tutorclip-log-xctest-\(UUID().uuidString)", isDirectory: true)

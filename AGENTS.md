@@ -4,7 +4,7 @@ These rules define how future coding work on TutorClip should be done.
 
 ## Product Contract
 
-TutorClip is a personal macOS 14+ SAT screenshot tutor.
+TutorClip is a personal macOS 26+ SAT screenshot tutor.
 
 Required behavior:
 
@@ -14,6 +14,7 @@ Required behavior:
 - Shortcut must remain configurable.
 - The shortcut opens a screenshot selection overlay.
 - OCR must run locally with Apple Vision.
+- Structured document OCR exclusively uses `RecognizeDocumentsRequest`; table rows and cells must be preserved for DeepSeek text context.
 - DeepSeek is the LLM provider.
 - Default AI response language is Chinese.
 - The AI persona is an experienced SAT tutor.
@@ -34,6 +35,7 @@ These are hard requirements.
 - Do not store the DeepSeek API key in Keychain.
 - Do not hardcode API keys.
 - Do not write API keys into logs, history, SQLite, settings, or source files.
+- `ConfigLoader` exclusively owns explicit API-key persistence to `~/.tutorclip/config.json`; the Settings UI may save or remove that key only through user-invoked actions, and the file must use owner-only `0600` permissions.
 
 API key lookup order:
 

@@ -12,6 +12,7 @@ Use this checklist before claiming the design document is fully implemented.
 - Confirm `~/Applications/TutorClip.app/Contents/MacOS/TutorClip` exists after `make install-signed-local`.
 - Confirm every source file is under 500 lines.
 - Confirm the Markdown pipeline probe reports preserved choice breaks and rendered line breaks during `make verify`.
+- For a synthetic or user-supplied table question, run `make verify-table-ai IMAGE=... EXPECTED_ANSWER=... EXPECTED_TITLE=...` and confirm Vision finds a table, DeepSeek returns GFM, and both formatting and explanation answers match.
 - Optional: inspect local signing identities with `security find-identity -v -p codesigning`. This shell may show zero standalone identities even when Xcode automatic signing succeeds.
 - Confirm the signed app reports `TeamIdentifier=T84BKD53ZD` with `codesign -dv .xcode-derived/Build/Products/Debug/TutorClip.app`.
 - Optional: run `TUTORCLIP_VERIFY_OCR=1 make verify` to confirm Vision text recognition supports the required languages. The authoritative OCR content verification is the GUI capture flow below.
@@ -93,3 +94,37 @@ Use this checklist before claiming the design document is fully implemented.
 - Disable history, capture again, close, and confirm the session is not saved.
 - Confirm no screenshots are written to `.tutorclip` or project files.
 - Confirm API key is not written to SQLite, settings JSON, logs, or source files.
+
+## SAT Learning System
+
+- Confirm OCR formatting assigns Section, Domain, Skill, difficulty, and confidence when DeepSeek can determine them.
+- Correct an AI classification in the tutor window and confirm History shows the edited values.
+- Click Got It and confirm the question becomes pending verification with a future review date.
+- Click Review and confirm a foundational teaching request starts and the question is due today.
+- Confirm clicking Review first asks where the student is stuck and does not immediately start a long AI response.
+- Choose a gap, start learning, and confirm only the Foundation 1/3 actions are shown.
+- Confirm guided teaching never reveals or eliminates toward the original answer before the student answers.
+- For Reading/Writing, confirm English, task-meaning, concept, and application gaps produce different teaching strategies.
+- For Math, confirm concept/formula, modeling, execution, and graph/function gaps are available.
+- Confirm Change Learning Gap returns to diagnosis without losing the original difficulty.
+- Continue to Quick Check 2/3 and confirm the protocol answer never appears in streamed chat text.
+- Confirm the quick check tests the displayed learning focus rather than an unrelated passage detail.
+- Pass the quick check, complete the easier question, and confirm original-difficulty verification becomes available.
+- Confirm scaffolded easy practice is recorded as hint-assisted and self-reported Got It does not count as independent mastery.
+- Submit an answer and confirm the first result locks; use Try Again and confirm the retry does not replace the first scored attempt.
+- Confirm a first independent correct answer schedules one day later, while a hint-assisted correct answer remains due for independent verification.
+- For a low-confidence AI answer, confirm no automatic grading occurs until the user confirms the correct answer.
+- Generate easier and verification questions, then use the Question Chain menu to revisit the original and every generated question.
+- During streaming, scroll upward and confirm TutorClip does not force the view back to the bottom on every token batch.
+- Capture synthetic underlined text and confirm TutorClip shows a visual-cue notice and underlines the detected word in the Question view; compare against Screenshot for false positives.
+- Close and reopen the history session during the flow and confirm the current step is restored.
+- Select a wrong answer, choose an error reason, and confirm mistake analysis starts and the review is scheduled.
+- Generate a practice question and confirm it is labeled AI Generated and only appears after independent validation.
+- Open History and confirm Review, Skills, and History workspaces are available.
+- Confirm Quick 5 and Review 10 advance to the next due question after closing the current tutor window.
+- Snooze a due question and confirm it leaves today's queue until tomorrow.
+- Filter history by status, Section, Domain, Skill, difficulty, error reason, source, and date.
+- Expand Learning Timeline and confirm recent attempts and review states appear.
+- Confirm Skill Profiles show mastery, accuracy, question count, common error, and recommended difficulty.
+- Start targeted practice from a Skill Profile and confirm the generated question matches that skill.
+- Reset a Skill Profile and confirm its attempts, review schedule, and mastery return to the initial state.

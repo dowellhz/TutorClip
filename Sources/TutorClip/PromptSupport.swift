@@ -101,6 +101,13 @@ extension PromptBuilder {
             QUESTION_METADATA
             Answer: correct choice letter
             Type: exactly one of reading, writing, notesSynthesis, vocabulary, grammar, math, unknown
+            Section: Reading and Writing, Math, or unknown
+            Domain: official SAT content domain
+            Skill: official SAT skill
+            QuestionTypeID: TutorClip stable question type ID
+            KnowledgePoints: 1-3 TutorClip knowledge point IDs separated by commas
+            Difficulty: easy, medium, hard, or unknown
+            Confidence: number from 0 to 1
             END_QUESTION_METADATA
             Do not output slash-separated labels such as reading/writing/notesSynthesis.
             Keep it realistic and concise.
@@ -117,6 +124,13 @@ extension PromptBuilder {
         QUESTION_METADATA
         Answer: 正确选项字母
         Type: 只能填一个标签：reading、writing、notesSynthesis、vocabulary、grammar、math、unknown
+        Section: 只能填 Reading and Writing、Math 或 unknown
+        Domain: College Board SAT 官方 Domain
+        Skill: College Board SAT 官方 Skill
+        QuestionTypeID: TutorClip 稳定题型 ID
+        KnowledgePoints: 1-3 个 TutorClip 知识点 ID，以英文逗号分隔
+        Difficulty: 只能填 easy、medium、hard 或 unknown
+        Confidence: 0 到 1 之间的小数
         END_QUESTION_METADATA
         不要输出 reading/writing/notesSynthesis 这种斜杠组合。
         题目要真实、简洁，适合学生重新做一遍。
@@ -170,10 +184,42 @@ extension PromptBuilder {
     }
 
     func structuredSummary(for document: OCRDocument) -> String {
-        document.lines.prefix(80).enumerated().map { index, line in
+        let lines = document.lines.prefix(80).enumerated().map { index, line in
             let box = line.boundingBox
             return "\(index + 1). [x:\(box.x.rounded2), y:\(box.y.rounded2), w:\(box.width.rounded2), h:\(box.height.rounded2), c:\(Double(line.confidence).rounded2)] \(line.text)"
         }.joined(separator: "\n")
+        let tables = document.structuredTables.enumerated().map { tableIndex, table in
+            let rows = table.rows.map { row in row.map { $0.text.replacingOccurrences(of: "\t", with: " ") }.joined(separator: "\t") }.joined(separator: "\n")
+            return "STRUCTURED_TABLE_\(tableIndex + 1)\n\(rows)\nEND_STRUCTURED_TABLE_\(tableIndex + 1)"
+        }.joined(separator: "\n")
+        return [lines, tables].filter { !$0.isEmpty }.joined(separator: "\n")
+    }
+
+    func formattingStructureSummary(for document: OCRDocument) -> String {
+        guard !document.structuredTables.isEmpty else { return "" }
+        let title = document.documentTitle.map { "DOCUMENT_TITLE\n\($0.text)\nEND_DOCUMENT_TITLE" } ?? ""
+        let paragraphs = (document.paragraphs ?? []).sorted { lhs, rhs in
+            if abs(lhs.boundingBox.y - rhs.boundingBox.y) > 0.01 { return lhs.boundingBox.y > rhs.boundingBox.y }
+            return lhs.boundingBox.x < rhs.boundingBox.x
+        }.prefix(24).enumerated().map { index, paragraph in
+            "\(index + 1). [x:\(paragraph.boundingBox.x.rounded2), y:\(paragraph.boundingBox.y.rounded2)] \(paragraph.text)"
+        }.joined(separator: "\n")
+        let paragraphBlock = paragraphs.isEmpty ? "" : "VISUAL_PARAGRAPHS_TOP_TO_BOTTOM\n\(paragraphs)\nEND_VISUAL_PARAGRAPHS"
+        let nearbyLines = document.lines.filter { line in
+            document.structuredTables.contains { table in
+                table.boundingBox.cgRect.insetBy(dx: -0.06, dy: -0.06).intersects(line.boundingBox.cgRect)
+            }
+        }.prefix(36).enumerated().map { index, line in
+            let box = line.boundingBox
+            return "\(index + 1). [x:\(box.x.rounded2), y:\(box.y.rounded2)] \(line.text)"
+        }.joined(separator: "\n")
+        let tables = document.structuredTables.enumerated().map { tableIndex, table in
+            let rows = table.rows.map { row in
+                row.map { $0.text.replacingOccurrences(of: "\t", with: " ") }.joined(separator: "\t")
+            }.joined(separator: "\n")
+            return "STRUCTURED_TABLE_\(tableIndex + 1)\n\(rows)\nEND_STRUCTURED_TABLE_\(tableIndex + 1)"
+        }.joined(separator: "\n")
+        return [title, paragraphBlock, nearbyLines, tables].filter { !$0.isEmpty }.joined(separator: "\n")
     }
 
     private func chineseExplanationInstruction(for category: SessionCategory) -> String {

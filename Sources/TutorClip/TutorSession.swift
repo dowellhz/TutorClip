@@ -14,8 +14,9 @@ final class TutorSession: ObservableObject, Identifiable {
     @Published var selectedAnswer: String?
     @Published var correctAnswer: String?
     @Published var vocabularyCards: [VocabularyCard]
+    @Published var learningMetadata: SATLearningMetadata
 
-    init(id: UUID, title: String, createdAt: Date, updatedAt: Date, ocrDocument: OCRDocument, messages: [ChatMessage], screenshotInMemory: NSImage?, category: SessionCategory, studyStatus: StudyStatus = .unreviewed, selectedAnswer: String? = nil, correctAnswer: String? = nil, vocabularyCards: [VocabularyCard] = []) {
+    init(id: UUID, title: String, createdAt: Date, updatedAt: Date, ocrDocument: OCRDocument, messages: [ChatMessage], screenshotInMemory: NSImage?, category: SessionCategory, studyStatus: StudyStatus = .unreviewed, selectedAnswer: String? = nil, correctAnswer: String? = nil, vocabularyCards: [VocabularyCard] = [], learningMetadata: SATLearningMetadata = SATLearningMetadata()) {
         self.id = id
         self.title = title
         self.createdAt = createdAt
@@ -28,6 +29,7 @@ final class TutorSession: ObservableObject, Identifiable {
         self.selectedAnswer = selectedAnswer
         self.correctAnswer = correctAnswer
         self.vocabularyCards = vocabularyCards
+        self.learningMetadata = learningMetadata
     }
 
     static func newSession(screenshot: NSImage?) -> TutorSession {

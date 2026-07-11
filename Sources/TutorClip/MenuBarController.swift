@@ -27,6 +27,7 @@ final class MenuBarController: NSObject {
         let recentItem = NSMenuItem(title: language.text("最近记录", "Recent Sessions"), action: nil, keyEquivalent: "")
         recentItem.tag = recentSessionsTag
         menu.addItem(recentItem)
+        menu.addItem(NSMenuItem(title: language.text("知识地图", "Knowledge Map"), action: #selector(knowledgeMap), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: language.text("设置", "Settings"), action: #selector(settings), keyEquivalent: ","))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: language.text("退出 TutorClip", "Quit TutorClip"), action: #selector(quit), keyEquivalent: "q"))
@@ -42,6 +43,10 @@ final class MenuBarController: NSObject {
 
     @objc private func settings() {
         coordinator?.showSettings()
+    }
+
+    @objc private func knowledgeMap() {
+        coordinator?.showKnowledgeMap()
     }
 
     @objc private func history() {

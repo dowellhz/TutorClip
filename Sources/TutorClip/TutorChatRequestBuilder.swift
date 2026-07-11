@@ -18,7 +18,7 @@ struct TutorChatRequestBuilder {
         selectedText: String
     ) -> TutorChatRequest {
         let selected = selectedText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let userContent = promptBuilder.userPrompt(
+        var userContent = promptBuilder.userPrompt(
             action: action,
             document: session.ocrDocument,
             selectedText: selected.isEmpty ? nil : selected,
@@ -26,6 +26,11 @@ struct TutorChatRequestBuilder {
             category: session.category,
             language: language
         )
+        if action == .explainAll,
+           session.learningMetadata.isAIVerified,
+           let verifiedAnswer = session.correctAnswer {
+            userContent += "\n\n已由独立判题流程验证的正确答案：\(verifiedAnswer)。讲解必须以此答案为准；如果你的推理冲突，请重新核对题目数据，不得改写该答案。"
+        }
         let userMessage = ChatMessage(
             id: UUID(),
             sessionId: session.id,
@@ -37,7 +42,8 @@ struct TutorChatRequestBuilder {
                 language: language
             ),
             createdAt: Date(),
-            actionType: action
+            actionType: action,
+            contextDocumentID: session.ocrDocument.id
         )
         let assistantMessage = ChatMessage(
             id: UUID(),
@@ -45,11 +51,19 @@ struct TutorChatRequestBuilder {
             role: .assistant,
             content: "",
             createdAt: Date(),
-            actionType: action
+            actionType: action,
+            contextDocumentID: session.ocrDocument.id
         )
 
-        var deepSeekMessages = [DeepSeekMessage(role: "system", content: promptBuilder.systemPrompt(language: language))]
-        for message in session.messages.suffix(8) where message.role == .user || message.role == .assistant {
+        let systemPrompt = action == .guidedLearning
+            ? promptBuilder.guidedLearningSystemPrompt(language: language)
+            : promptBuilder.systemPrompt(language: language)
+        var deepSeekMessages = [DeepSeekMessage(role: "system", content: systemPrompt)]
+        let currentContextMessages = session.messages.filter {
+            ($0.contextDocumentID == nil || $0.contextDocumentID == session.ocrDocument.id)
+                && ($0.role == .user || $0.role == .assistant)
+        }
+        for message in currentContextMessages.suffix(8) {
             deepSeekMessages.append(DeepSeekMessage(role: message.role.rawValue, content: message.content))
         }
         deepSeekMessages.append(DeepSeekMessage(role: "user", content: userContent))

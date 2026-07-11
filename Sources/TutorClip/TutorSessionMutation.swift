@@ -5,6 +5,7 @@ enum TutorSessionMutation {
         case correct(String)
         case incorrect(selected: String, correct: String)
         case selected(String)
+        case locked(String)
     }
 
     static func updateOCRText(_ text: String, in session: TutorSession) {
@@ -15,19 +16,40 @@ enum TutorSessionMutation {
 
     @discardableResult
     static func selectAnswer(_ answer: String, in session: TutorSession) -> AnswerSelectionResult {
+        guard session.learningMetadata.answerSubmissionOpen else {
+            return .locked(session.selectedAnswer ?? answer)
+        }
         let selected = choiceLetter(answer) ?? answer.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         session.selectedAnswer = selected
         session.updatedAt = Date()
 
-        guard let correct = choiceLetter(session.correctAnswer) else {
+        guard let correct = choiceLetter(session.correctAnswer), session.learningMetadata.canAutoGradeAnswer else {
             return .selected(selected)
         }
-        if selected == correct {
-            session.studyStatus = .known
+        let duration = session.learningMetadata.currentAttemptStartedAt.map { max(0, Int(Date().timeIntervalSince($0))) }
+        let countsTowardMastery = session.learningMetadata.answerAttemptNumber == 1
+        let isCorrect = SATLearningStateMachine.recordAnswer(
+            selected: selected,
+            correct: correct,
+            usedHint: session.learningMetadata.pendingHintUsed,
+            durationSeconds: duration,
+            countsTowardMastery: countsTowardMastery,
+            metadata: &session.learningMetadata
+        )
+        session.learningMetadata.answerSubmissionOpen = false
+        if isCorrect {
+            if countsTowardMastery { session.studyStatus = .known }
             return .correct(correct)
         }
-        session.studyStatus = .mistake
+        if countsTowardMastery { session.studyStatus = .mistake }
         return .incorrect(selected: selected, correct: correct)
+    }
+
+    static func beginUnscoredRetry(in session: TutorSession) {
+        session.learningMetadata.answerAttemptNumber += 1
+        session.learningMetadata.answerSubmissionOpen = true
+        session.selectedAnswer = nil
+        session.updatedAt = Date()
     }
 
     static func answerSelectionResult(selected: String?, correct: String?) -> AnswerSelectionResult? {
@@ -55,9 +77,21 @@ enum TutorSessionMutation {
         session.correctAnswer = answer
         session.vocabularyCards = []
         session.studyStatus = .unreviewed
+        session.learningMetadata = SATLearningMetadata(isAIGenerated: true)
         session.category = category ?? SessionCategory.infer(from: question)
         session.title = SessionTitle.make(from: question)
         session.updatedAt = Date()
+    }
+
+    static func messagesArchivedForQuestionTransition(in session: TutorSession) -> [ChatMessage] {
+        let documentID = session.ocrDocument.id
+        return session.messages.map { message in
+            var archived = message
+            if archived.contextDocumentID == nil {
+                archived.contextDocumentID = documentID
+            }
+            return archived
+        }
     }
 
     static func updateFullText(_ text: String, in session: TutorSession) {

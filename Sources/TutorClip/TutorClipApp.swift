@@ -4,6 +4,7 @@ import SwiftUI
 
 @main
 struct TutorClipApp {
+    @MainActor
     static func main() {
         RuntimeLog.installCrashHooks()
         RuntimeLog.write("app-main")

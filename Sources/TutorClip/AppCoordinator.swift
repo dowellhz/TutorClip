@@ -16,10 +16,12 @@ final class AppCoordinator: ObservableObject {
     private var tutorWindowController: TutorWindowController?
     private var settingsWindowController: SettingsWindowController?
     private var historyWindowController: HistoryWindowController?
+    private var knowledgeMapWindowController: KnowledgeMapWindowController?
     private var launchMarkerTimer: Timer?
     private var didHandleCommandLineDemo = false
     private var captureHiddenWindows: [NSWindow] = []
     private var captureGeneration = CaptureGenerationTracker()
+    private var pendingReviewSessions: [TutorSession] = []
 
     func start() {
         RuntimeLog.write("coordinator-start")
@@ -49,6 +51,7 @@ final class AppCoordinator: ObservableObject {
 
     func beginCapture() {
         RuntimeLog.write("begin-capture")
+        pendingReviewSessions = []
         guard PermissionService.hasScreenCapturePermission() else {
             RuntimeLog.write("begin-capture-blocked-screen-permission")
             showScreenCapturePermissionRequired()
@@ -118,11 +121,13 @@ final class AppCoordinator: ObservableObject {
             promptBuilder: promptBuilder,
             onRecapture: { [weak self] in self?.beginCapture() },
             onSettings: { [weak self] in self?.showSettings() },
+            onKnowledgeMap: { [weak self] in self?.showKnowledgeMap() },
             onClose: { [weak self] in self?.tutorWindowController?.close() }
         )
         tutorWindowController = TutorWindowController(viewModel: viewModel) { [weak self] in
             self?.ocrRequestLifecycle.cancel(reason: "tutor-window-closed")
             self?.tutorWindowController = nil
+            self?.openNextReviewSession()
         }
         tutorWindowController?.show(near: selectionRect)
     }
@@ -146,10 +151,75 @@ final class AppCoordinator: ObservableObject {
     func showHistory() {
         historyWindowController?.close()
         let viewModel = HistoryViewModel(settingsStore: settingsStore, historyStore: historyStore) { [weak self] session in
+            self?.pendingReviewSessions = []
             self?.openTutorWindow(session: session)
+        } onPracticeSkill: { [weak self] profile in
+            self?.startSkillPractice(profile)
+        } onStartReview: { [weak self] sessions, limit in
+            self?.startReviewQueue(sessions, limit: limit)
         }
         historyWindowController = HistoryWindowController(viewModel: viewModel)
         historyWindowController?.show()
+    }
+
+    func showKnowledgeMap() {
+        knowledgeMapWindowController?.close()
+        let viewModel = HistoryViewModel(settingsStore: settingsStore, historyStore: historyStore, onOpen: { _ in }, onPracticeKnowledgePoint: { [weak self] profile in
+            self?.startKnowledgePointPractice(profile)
+        })
+        knowledgeMapWindowController = KnowledgeMapWindowController(viewModel: viewModel)
+        knowledgeMapWindowController?.show()
+    }
+
+    private func startKnowledgePointPractice(_ profile: SATKnowledgePointProfile) {
+        guard let type = SATKnowledgeCatalog.questionType(id: profile.definition.questionTypeID) else { return }
+        pendingReviewSessions = []
+        let difficulty: SATDifficulty = profile.state == .pendingVerification ? .medium : .easy
+        let target = "SAT targeted example. Question type: \(type.titleEN). Knowledge point: \(profile.definition.titleEN) [\(profile.id)]. Difficulty: \(difficulty.rawValue)."
+        var document = OCRDocument.empty()
+        document.fullText = target
+        document.editedText = target
+        let session = TutorSession.newSession(screenshot: nil)
+        session.ocrDocument = document
+        session.title = profile.definition.titleZH
+        session.category = type.domain == "Standard English Conventions" ? .grammar : .reading
+        session.learningMetadata.section = .readingWriting
+        session.learningMetadata.domain = type.domain
+        session.learningMetadata.skill = type.skill
+        session.learningMetadata.questionTypeID = type.id
+        session.learningMetadata.knowledgePointIDs = [profile.id]
+        session.learningMetadata.difficulty = difficulty
+        openTutorWindow(session: session)
+        tutorWindowController?.generatePracticeQuestion()
+    }
+
+    private func startSkillPractice(_ profile: SATSkillProfile) {
+        pendingReviewSessions = []
+        var document = OCRDocument.empty()
+        let target = "SAT targeted practice. Section: \(profile.section.rawValue). Domain: \(profile.domain). Skill: \(profile.skill). Difficulty: \(profile.recommendedDifficulty.rawValue)."
+        document.fullText = target
+        document.editedText = target
+        let session = TutorSession.newSession(screenshot: nil)
+        session.ocrDocument = document
+        session.title = profile.skill
+        session.category = profile.section == .math ? .math : .reading
+        session.learningMetadata.section = profile.section
+        session.learningMetadata.domain = profile.domain
+        session.learningMetadata.skill = profile.skill
+        session.learningMetadata.difficulty = profile.recommendedDifficulty
+        openTutorWindow(session: session)
+        tutorWindowController?.generatePracticeQuestion()
+    }
+
+    private func startReviewQueue(_ sessions: [TutorSession], limit: Int) {
+        tutorWindowController?.close()
+        pendingReviewSessions = Array(sessions.prefix(limit))
+        openNextReviewSession()
+    }
+
+    private func openNextReviewSession() {
+        guard !pendingReviewSessions.isEmpty else { return }
+        openTutorWindow(session: pendingReviewSessions.removeFirst())
     }
 
     func recentSessions(limit: Int) -> [TutorSession] {

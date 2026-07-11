@@ -10,6 +10,23 @@ struct PromptBuilder {
         }
     }
 
+    func guidedLearningSystemPrompt(language: AppLanguage) -> String {
+        language.text(
+            """
+            你是一名采用苏格拉底式教学的 SAT 老师。当前处于引导学习流程，而不是整题讲解。
+            严禁公布、暗示或排除原题的正确选项，也不要输出原题答案字母。只完成用户指定的当前一步。
+            可以解释必要的英文、题意、知识点或方法，但必须保留让学生独立作答的机会。
+            如果任务要求协议块，必须严格输出；协议块之外保持简洁。OCR 不完整时明确说明，不得补造内容。
+            """,
+            """
+            You are a Socratic SAT tutor in a guided-learning flow, not a full-solution mode.
+            Never reveal, imply, or eliminate toward the original question's correct choice, and never output its answer letter. Complete only the requested step.
+            Explain necessary language, task meaning, concepts, or methods while preserving the student's chance to answer independently.
+            Follow requested protocol blocks exactly. State OCR uncertainty instead of inventing content.
+            """
+        )
+    }
+
     private var chineseSystemPrompt: String {
         """
         你是一名经验丰富的 SAT 老师，目标是让学生看懂题目、会判断选项，而不是堆长篇讲义。
@@ -32,6 +49,7 @@ struct PromptBuilder {
         如果是 SAT Math，按已知条件、考点、步骤、易错点、最终答案讲。
         如果用户只是追问某一点，只回答用户问题，不要自动翻译、总结或展开整题。
         如果 OCR 文本明显缺失、混乱或无法判断，请直接说明不确定之处，不要编造题目内容。
+        STRUCTURED_TABLE_n 块是 Apple Vision 按单元格输出的制表符分隔表格，行列关系优先于普通 OCR 行。若表格块缺失、为空或数据与题干冲突，必须说明无法可靠读取表格，禁止猜测数值。
         """
     }
 
@@ -49,6 +67,7 @@ struct PromptBuilder {
         5. Why the other choices are wrong: eliminate each choice in its own paragraph using "Choice A: Wrong. Trap: ... Reason: ..."; do not combine multiple choices into one paragraph.
 
         For SAT Reading/Writing, prioritize question logic, paraphrase, sentence relationships, vocabulary, and grammar that affect the answer. For SAT Math, explain given information, tested concept, steps, traps, and final answer. If OCR is incomplete or ambiguous, say what is uncertain and do not invent missing content.
+        STRUCTURED_TABLE_n blocks are tab-separated cell data produced by Apple Vision. Treat their row-column structure as authoritative over plain OCR lines. If a table block is missing, empty, or conflicts with the prompt, state that the table cannot be read reliably and never guess values.
         """
     }
 
@@ -63,12 +82,16 @@ struct PromptBuilder {
         } else {
             parts.append("\(language.text("OCR 全文", "Full OCR text"))：\n\(ocrText.isEmpty ? language.text("(OCR 为空)", "(OCR is empty)") : ocrText)")
             parts.append("\(language.text("识别题型", "Detected question type"))：\(category.displayName(language: language))")
-            let structure = structuredSummary(for: document)
+            let structure = formattingStructureSummary(for: document)
             if !structure.isEmpty {
                 parts.append("\(language.text("OCR 结构摘要", "OCR layout summary"))：\n\(structure)")
             }
             if !selected.isEmpty {
                 parts.append("\(language.text("用户选中文本", "Selected text"))：\n\(selected)")
+            }
+            let underlined = document.tokens.filter { $0.isLikelyUnderlined == true }.map(\.text)
+            if !underlined.isEmpty {
+                parts.append("\(language.text("本地下划线检测（可能有误，请结合截图语义谨慎处理）", "Locally detected underlined text (may be imperfect; treat cautiously)"))：\n\(underlined.joined(separator: ", "))")
             }
         }
         parts.append("\(language.text("任务", "Task"))：\(instruction(for: action, hasSelection: !selected.isEmpty, category: category, language: language))")
@@ -82,12 +105,13 @@ struct PromptBuilder {
     }
 
     func formatOCRPrompt(document: OCRDocument) -> [DeepSeekMessage] {
-        [
+        let structure = formattingStructureSummary(for: document)
+        return [
             DeepSeekMessage(
                 role: "system",
                 content: """
                 你是 SAT OCR Markdown 排版整理器。你的任务是把 OCR 文本整理成可直接用 Markdown 渲染的清晰文本，并提取选择题正确答案和题型。
-                你只允许调整空格、换行、空白行、段落和选项排列。
+                通常只允许调整空格、换行、空白行、段落和选项排列。当 OCR 结构摘要包含 STRUCTURED_TABLE_n 时有两个明确例外：(1) 必须用标准 GFM Markdown 表格恢复这些单元格，可以增加表格语法所需的 |、- 和对齐符号；(2) OCR 可能把同一个表格标题的已有残片错排到表格前后，必须移动这些已有残片、按语义顺序合并，并把完整标题放到表格正上方。除此之外不得增加、删除、改写、移动或猜测任何内容。
                 对题目正文严禁增加、删除、替换、翻译或改写任何非空白字符。不要解释，不要添加标题，不要新增项目符号。
                 如果 OCR 原文已经包含项目符号，例如 "•"，必须原样保留这些符号，并把每条笔记拆成独立 Markdown 段落。
                 题目正文不要使用粗体、斜体、分隔线或任何装饰性 Markdown 标记。
@@ -98,6 +122,14 @@ struct PromptBuilder {
                 QUESTION_METADATA
                 Answer: 正确选项字母；如果无法从题目推出则留空
                 Type: 只能填下面 7 个英文标签之一：reading、writing、notesSynthesis、vocabulary、grammar、math、unknown
+                Section: 只能填 Reading and Writing、Math、unknown
+                Domain: College Board SAT 官方 Domain；无法判断则留空
+                Skill: College Board SAT 官方 Skill；无法判断则留空
+                QuestionTypeID: 从 TutorClip SAT 类型目录选择稳定 ID；无法判断则留空
+                KnowledgePoints: 从该类型对应的 TutorClip 知识点 ID 中选择 1-3 个，英文逗号分隔；无法判断则留空
+                Difficulty: 只能填 easy、medium、hard、unknown
+                Confidence: 0 到 1 之间的小数
+                AnswerConfidence: 对正确答案判断的置信度，0 到 1；Answer 为空时填 0
                 END_QUESTION_METADATA
                 Type 字段禁止输出斜杠、多个标签、中文解释或额外文字。
                 """
@@ -111,6 +143,16 @@ struct PromptBuilder {
                 - 不要增加任何文字。
                 - 不要删除任何文字。
                 - 不要修改任何单词、字母、数字、标点或符号。
+                - 以上字符限制对表格语法有且只有一个例外：如果下面存在 STRUCTURED_TABLE_n，必须根据其中的制表符分列，输出标准 GFM Markdown 表格；允许增加表格结构所需的 |、- 和对齐符号。
+                - STRUCTURED_TABLE_n 的行列关系优先于普通 OCR 行；第一行作为表头，其余行作为数据行。不得猜测、合并或改写单元格内容。
+                - 如果结构摘要存在 DOCUMENT_TITLE，它是 Apple Vision 识别的权威文档/表格标题，必须完整放在第一个表格正上方，不得拆分、倒序或放到表格后面。
+                - VISUAL_PARAGRAPHS_TOP_TO_BOTTOM 已按屏幕视觉位置从上到下排序。恢复标题和正文顺序时必须以它为准，不能使用 OCR 全文中可能错乱的出现顺序。
+                - 如果结构化表格开头存在只有一个单元格的跨列行，它通常是表格标题而不是列标题；必须结合 OCR 全文或普通行中的相邻标题片段，按标题语义顺序放在表格正上方，再用下一行作为 GFM 表头。禁止把标题残片放到表格后面。
+                - 同一表格标题因 OCR 被拆成相邻多行时，可以只通过空格和换行把它们合并成一个标题；不得改写标题文字。
+                - 仅针对被 OCR 错排到表格前后两侧的标题残片，允许移动已有残片并合并到表格上方；这是除选项排列外唯一允许的文字重排，不能用于改写正文、题干、数据或选项。
+                - 特别检查表格后、正文前是否存在一个读起来尚未结束的短标题残片；如果它能与结构化表格的单单元格标题行组成完整标题，必须把该残片移到标题行之前并合并，不能原地保留。
+                - 结构化单元格的行列关系是权威的；如果单元格文字明显截断，只能用 OCR 普通行中实际出现的对应字符补全，不能凭常识猜字或数值。
+                - 表格前后必须各有空白行。不要把 STRUCTURED_TABLE_n、END_STRUCTURED_TABLE_n 协议标记输出到 FORMATTED_QUESTION。
                 - 只能调整空格、换行、空白行和段落。
                 - 正文段落内不要保留 OCR 扫描产生的硬换行；同一个自然段应连续成一段，让 Markdown 自动换行。
                 - 用 Markdown 段落排版：文章段落、题干、每个选项之间用一个空白行隔开。
@@ -123,7 +165,10 @@ struct PromptBuilder {
                 - 如果选项内容很长，不要手动硬换行，让 Markdown 自动换行；但不能把下一个选项接在同一段。
                 - 不要添加 Markdown 标题、列表符号、粗体、引用块、代码块或分隔线。
                 - FORMATTED_QUESTION 块内只输出整理后的 Markdown 文本。
-                - QUESTION_METADATA 块只输出 Answer 和 Type 字段。
+                - QUESTION_METADATA 块只输出 Answer、Type、Section、Domain、Skill、QuestionTypeID、KnowledgePoints、Difficulty、Confidence、AnswerConfidence 字段。
+                - Reading and Writing QuestionTypeID 只能是：RW.II.CID, RW.II.INF, RW.II.COE.TEXT, RW.II.COE.QUANT, RW.CS.WIC, RW.CS.TSP, RW.CS.CTC, RW.EI.RS, RW.EI.TR, RW.SEC.BND, RW.SEC.FSS。
+                - KnowledgePoints 必须使用 TutorClip 知识点稳定 ID；不确定时留空，禁止自造 ID。
+                - 合法 KnowledgePoints ID：\(SATKnowledgeCatalog.knowledgePoints.map(\.id).joined(separator: ", "))
                 - 如果能解出正确答案，Answer 填 A/B/C/D；如果 OCR 不完整或无法判断，Answer 留空。
                 - Type 必须判断 SAT 题型，只能输出一个标签：reading、writing、notesSynthesis、vocabulary、grammar、math、unknown。
                 - 如果题目包含 "student has taken the following notes"、项目符号笔记、并要求 "accomplish this goal"，Type 必须填 notesSynthesis。
@@ -145,6 +190,71 @@ struct PromptBuilder {
 
                 OCR 文本：
                 \(document.editedText.isEmpty ? "(OCR 为空)" : document.editedText)
+
+                OCR 结构摘要（仅用于恢复版面，不得原样输出协议标记）：
+                \(structure.isEmpty ? "(无结构摘要)" : structure)
+                """
+            )
+        ]
+    }
+
+    func repairTableFormattingPrompt(document: OCRDocument, candidate: String, validationFeedback: String = "") -> [DeepSeekMessage] {
+        let structure = formattingStructureSummary(for: document)
+        return [
+            DeepSeekMessage(
+                role: "system",
+                content: """
+                你是 SAT 表格题 Markdown 布局审校器。只检查候选排版中的表格标题、GFM 表格、正文和选项顺序。
+                必须把被 OCR 错排在表格前后两侧的已有标题残片合并为完整标题，并放在表格正上方。跨列单单元格行是标题，不是表头；下一行才是表头。
+                如果 OCR 表格结构提供 DOCUMENT_TITLE，必须逐字使用它作为第一个表格上方的完整标题，并删除候选中重复或拆散的标题残片。
+                表格必须保留结构摘要中的全部行列和单元格文字。可以补充 GFM 的 |、-，也可以用 OCR 全文实际出现的字符修复截断；不得猜测或改写数据、正文、题干和选项。
+                表格列数必须等于数据行中最大的单元格数，每个表头和每行数据必须严格同列数。若 OCR 把相邻表头合并成一个单元格，必须使用 OCR 普通行和视觉段落中已经出现的表头文字拆回对应列，禁止让一列拥有两个字段名称。
+                只输出 FORMATTED_QUESTION 与 END_FORMATTED_QUESTION 包裹的修正版，不要解释，不要输出代码块。
+                """
+            ),
+            DeepSeekMessage(
+                role: "user",
+                content: """
+                OCR 全文：
+                \(document.editedText)
+
+                OCR 表格结构：
+                \(structure)
+
+                待审校候选：
+                \(candidate)
+
+                必做审校步骤：
+                1. 找到候选中的第一个 GFM 表格。
+                2. 检查表格后、第一段完整正文前的所有短独立行；如果某行没有句末标点、语义未结束或以连词结束，应视为表格标题残片。
+                3. 将这些已有残片与表格前的标题行按能组成完整标题的语义顺序合并，完整标题只出现一次并紧邻表格上方。
+                标题残片在 OCR 中可能是反序的，禁止照 OCR 出现顺序机械拼接。英文残片如果以 and、or、of、for 等连接词结束，它必须放在能补全该连接关系的残片之前；最终标题必须是语法完整、自然的名词短语，不能以连接词结束。
+                4. 输出前确认表格后、正文前不再残留标题碎片，并确认表格行列未丢失。
+                5. 逐行数竖线分隔后的单元格：表头列数必须与每一条数据行完全一致；数据行较宽时，说明表头发生了 OCR 合并，必须恢复缺失的独立表头列。
+                \(validationFeedback.isEmpty ? "" : "上次审校失败：\(validationFeedback) 本次必须修正，同时完整保留所有正文和 A/B/C/D 选项。")
+                """
+            )
+        ]
+    }
+
+    func restoreMissingQuestionContentPrompt(source: String, candidate: String) -> [DeepSeekMessage] {
+        [
+            DeepSeekMessage(
+                role: "system",
+                content: """
+                你是 SAT 题目内容完整性修复器。候选已经包含正确的 Markdown 表格，但可能遗漏原始 OCR 中的正文、题干或选项。
+                逐项对照原始 OCR，把遗漏内容按原顺序补回候选；必须保留候选中的完整标题和 GFM 表格，不得删减、总结、翻译或改写任何原文。
+                如果原文包含 A/B/C/D，输出必须完整包含 A/B/C/D。只输出 FORMATTED_QUESTION 与 END_FORMATTED_QUESTION 包裹的完整结果。
+                """
+            ),
+            DeepSeekMessage(
+                role: "user",
+                content: """
+                原始 OCR：
+                \(source)
+
+                已修表格候选：
+                \(candidate)
                 """
             )
         ]
@@ -222,6 +332,8 @@ struct PromptBuilder {
             不要自动翻译、总结或逐句解释整段，除非用户明确要求。
             如果需要证据，请用“原文：...”下一行“翻译：...”的形式引用关键片段。
             """
+        case .guidedLearning:
+            return "只执行用户指定的引导学习步骤，禁止给出原题答案或判断原题选项。"
         }
     }
 
@@ -251,6 +363,8 @@ struct PromptBuilder {
             return practiceSimilarInstruction(language: .english)
         case .customQuestion:
             return "Answer the user's question in English based on the OCR text. Do not translate or summarize the whole passage unless the user asks."
+        case .guidedLearning:
+            return "Perform only the requested guided-learning step. Do not reveal or judge the original question's answer choices."
         }
     }
 

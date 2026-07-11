@@ -1,5 +1,9 @@
 import Foundation
 
+enum LearningLoadingAction {
+    case foundation, alternativeExplanation, prerequisiteExplanation, microCheck, easyPractice, verification
+}
+
 struct TutorRequest {
     var action: TutorAction
     var question: String?
@@ -49,7 +53,7 @@ extension TutorAction {
     }
 
     var suppressesQuestionGuidance: Bool {
-        self == .translateSelection || self == .vocabulary || self == .translateAll
+        self == .translateSelection || self == .vocabulary || self == .translateAll || self == .guidedLearning
     }
 }
 

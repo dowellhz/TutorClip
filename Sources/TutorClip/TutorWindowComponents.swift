@@ -124,24 +124,98 @@ struct VocabularyCardsPanel: View {
         )
     }
 
-    private func labeledVocabularyLine(_ label: String, _ value: String) -> Text {
-        Text("\(label)：").fontWeight(.semibold) + Text(value)
+    private func labeledVocabularyLine(_ label: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 0) {
+            Text("\(label)：").fontWeight(.semibold)
+            Text(value)
+        }
     }
 }
 
 struct StudyStatusControl: View {
     @ObservedObject var viewModel: TutorViewModel
+    @State private var showsMetadata = false
 
     var body: some View {
-        HStack(spacing: 8) {
-            Text(viewModel.session.studyStatus.title(language: viewModel.language))
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.secondary)
-            Spacer()
-            statusButton(.known)
-            statusButton(.needsReview)
-            statusButton(.mistake)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text(viewModel.session.studyStatus.title(language: viewModel.language))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                statusButton(.known)
+                statusButton(.needsReview)
+                statusButton(.mistake)
+                Spacer(minLength: 8)
+                Menu {
+                ForEach(SATErrorReason.allCases.filter { $0 != .unknown }) { reason in
+                    Button(reason.title(language: viewModel.language)) { viewModel.setErrorReason(reason) }
+                }
+                } label: {
+                    Text(viewModel.session.learningMetadata.errorReason?.title(language: viewModel.language) ?? viewModel.text("错因", "Reason"))
+                }
+                .menuStyle(.borderlessButton)
+                .frame(maxWidth: 120)
+                Button {
+                    showsMetadata.toggle()
+                } label: {
+                    Image(systemName: showsMetadata ? "chevron.up" : "tag")
+                }
+                .buttonStyle(ChromeButtonStyle())
+                .help(viewModel.text("题目标签", "Question Metadata"))
+            }
+            if showsMetadata {
+                metadataEditor
+            }
+            if viewModel.session.studyStatus != .needsReview, let feedback = viewModel.learningFeedback {
+                HStack {
+                    Text(feedback).font(.system(size: 11)).foregroundStyle(.secondary)
+                    Spacer()
+                    switch viewModel.session.studyStatus {
+                    case .known:
+                        Button(viewModel.text("立即验证", "Verify Now")) { viewModel.startImmediateVerification() }
+                    case .needsReview:
+                        EmptyView()
+                    case .mistake:
+                        Button(viewModel.text("错题变式", "Mistake Variant")) { viewModel.startMistakeVariant() }
+                    case .unreviewed:
+                        EmptyView()
+                    }
+                }
+            }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var metadataEditor: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Picker("", selection: Binding(get: { viewModel.session.learningMetadata.section }, set: viewModel.updateSATSection)) {
+                    ForEach(SATSection.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }
+                .frame(width: 150)
+                Picker("", selection: Binding(get: { viewModel.session.learningMetadata.difficulty }, set: viewModel.updateSATDifficulty)) {
+                    ForEach(SATDifficulty.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }
+                .frame(width: 100)
+                if viewModel.session.learningMetadata.isAIGenerated {
+                    Text(viewModel.text("AI 生成", "AI Generated"))
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+            HStack(spacing: 8) {
+                metadataField(viewModel.text("领域", "Domain"), value: Binding(get: { viewModel.session.learningMetadata.domain }, set: viewModel.updateSATDomain))
+                metadataField(viewModel.text("技能", "Skill"), value: Binding(get: { viewModel.session.learningMetadata.skill }, set: viewModel.updateSATSkill))
+            }
+        }
+        .padding(.top, 2)
+    }
+
+    private func metadataField(_ placeholder: String, value: Binding<String>) -> some View {
+        TextField(placeholder, text: value)
+            .textFieldStyle(.roundedBorder)
+            .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder
@@ -173,6 +247,17 @@ struct AnswerChoiceControl: View {
                 choiceButton(choice)
             }
             Spacer()
+            if viewModel.session.correctAnswer != nil,
+               !viewModel.session.learningMetadata.canAutoGradeAnswer {
+                Menu(viewModel.text("答案待确认", "Verify Answer")) {
+                    ForEach(choices, id: \.self) { choice in
+                        Button(viewModel.text("确认 \(choice) 为正确答案", "Confirm \(choice) as Correct")) {
+                            viewModel.confirmCorrectAnswer(choice)
+                        }
+                    }
+                }
+                .menuStyle(.borderlessButton)
+            }
             resultText
         }
     }
@@ -184,11 +269,13 @@ struct AnswerChoiceControl: View {
                 viewModel.selectAnswer(choice)
             }
             .buttonStyle(PrimaryCapsuleButtonStyle())
+            .disabled(!viewModel.session.learningMetadata.answerSubmissionOpen)
         } else {
             Button(choice) {
                 viewModel.selectAnswer(choice)
             }
             .buttonStyle(ChromeButtonStyle())
+            .disabled(!viewModel.session.learningMetadata.answerSubmissionOpen)
         }
     }
 
@@ -208,6 +295,15 @@ struct AnswerChoiceControl: View {
                 Text(viewModel.text("已选择 \(selected)", "Selected \(selected)"))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.secondary)
+            case .locked(let selected):
+                Text(viewModel.text("首次答案已锁定：\(selected)", "First answer locked: \(selected)"))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            if !viewModel.session.learningMetadata.answerSubmissionOpen,
+               viewModel.session.learningMetadata.answerAttemptNumber == 1 {
+                Button(viewModel.text("再试一次", "Try Again")) { viewModel.startAnswerRetry() }
+                    .buttonStyle(ChromeButtonStyle())
             }
         }
     }

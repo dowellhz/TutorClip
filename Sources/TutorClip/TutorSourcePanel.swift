@@ -26,7 +26,18 @@ struct TutorSourcePanel: View {
 
             Spacer()
 
-            if viewModel.viewMode == .text {
+            if !viewModel.session.learningMetadata.needsReviewFlow.questionChain.isEmpty {
+                Menu(viewModel.viewedQuestionSnapshot?.role.title(language: viewModel.language) ?? viewModel.text("当前题目", "Current Question")) {
+                    Button(viewModel.text("当前题目", "Current Question")) { viewModel.viewQuestionSnapshot(nil) }
+                    Divider()
+                    ForEach(viewModel.session.learningMetadata.needsReviewFlow.questionChain) { snapshot in
+                        Button(snapshot.role.title(language: viewModel.language)) { viewModel.viewQuestionSnapshot(snapshot) }
+                    }
+                }
+                .menuStyle(.borderlessButton)
+            }
+
+            if viewModel.viewMode == .text && viewModel.viewedQuestionSnapshot == nil {
                 Button(sourceTextEditing ? viewModel.text("完成", "Done") : viewModel.text("编辑", "Edit")) {
                     sourceTextEditing.toggle()
                 }
@@ -126,10 +137,13 @@ struct TutorSourcePanel: View {
     }
 
     private var questionMarkdown: some View {
-        SelectableMarkdownTextView(
-            markdown: viewModel.session.ocrDocument.editedText,
+        InteractiveQuestionMarkdownView(
+            markdown: viewModel.visibleQuestionText,
+            underlinedTexts: viewModel.viewedQuestionSnapshot == nil ? viewModel.underlinedOCRTexts : [],
+            language: viewModel.language,
             selectedText: $viewModel.selectedText,
-            selectionRect: $viewModel.selectedTextRect
+            selectionRect: $viewModel.selectedTextRect,
+            onTableInteraction: viewModel.run(tableInteraction:)
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .textBackgroundColor).opacity(0.22))

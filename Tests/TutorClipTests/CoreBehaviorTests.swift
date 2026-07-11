@@ -4,11 +4,127 @@ import XCTest
 @testable import TutorClip
 
 final class CoreBehaviorTests: XCTestCase {
+    func testStructuredTableIsSentAsProtectedTabSeparatedContext() {
+        var document = OCRDocument.empty()
+        document.fullText = "A small SAT table"
+        document.editedText = document.fullText
+        document.tables = [OCRTable(
+            id: UUID(),
+            boundingBox: CodableRect(CGRect(x: 0, y: 0, width: 1, height: 1)),
+            rows: [
+                [cell("Year", row: 0, column: 0), cell("Value", row: 0, column: 1)],
+                [cell("2025", row: 1, column: 0), cell("42", row: 1, column: 1)]
+            ]
+        )]
+        document.documentTitle = OCRDocumentTitle(text: "Language Rates", boundingBox: CodableRect(.zero))
+        let summary = PromptBuilder().structuredSummary(for: document)
+        XCTAssertTrue(summary.contains("STRUCTURED_TABLE_1"))
+        XCTAssertTrue(summary.contains("Year\tValue\n2025\t42"))
+        XCTAssertTrue(summary.contains("END_STRUCTURED_TABLE_1"))
+
+        let formattingMessages = PromptBuilder().formatOCRPrompt(document: document)
+        let formattingPrompt = formattingMessages.map(\.content).joined(separator: "\n")
+        XCTAssertTrue(formattingPrompt.contains("STRUCTURED_TABLE_1"))
+        XCTAssertTrue(formattingPrompt.contains("Year\tValue\n2025\t42"))
+        XCTAssertTrue(formattingPrompt.contains("标准 GFM Markdown 表格"))
+        XCTAssertTrue(formattingPrompt.contains("DOCUMENT_TITLE\nLanguage Rates\nEND_DOCUMENT_TITLE"))
+    }
+
+    func testFormattingStructureSummaryDoesNotSendLayoutForPlainQuestion() {
+        var document = OCRDocument.empty()
+        document.editedText = "Plain SAT question"
+        document.lines = [OCRLine(id: UUID(), text: "Plain SAT question", boundingBox: CodableRect(.zero), confidence: 1, tokenIds: [])]
+        XCTAssertTrue(PromptBuilder().formattingStructureSummary(for: document).isEmpty)
+        let prompt = PromptBuilder().userPrompt(action: .explainAll, document: document, selectedText: nil, customQuestion: nil, category: .reading, language: .chinese)
+        XCTAssertFalse(prompt.contains("OCR 结构摘要"))
+    }
+
+    func testGFMTableDetectorRecognizesValidTableWithoutMistakingPlainPipes() {
+        let table = """
+        Passage text.
+
+        | Language | Rate |
+        | --- | ---: |
+        | Serbian | 7.2 |
+        """
+        XCTAssertTrue(GFMTableDetector.containsTable(in: table))
+        XCTAssertFalse(GFMTableDetector.containsTable(in: "A | B is ordinary prose."))
+        XCTAssertFalse(GFMTableDetector.containsTable(in: "| A | B |\n| -- | --- |"))
+    }
+
+    func testQuestionMarkdownDocumentSeparatesMultipleTablesAndIgnoresFencedExample() {
+        let markdown = """
+        Intro paragraph.
+
+        | A | B |
+        | --- | --- |
+        | 1 | 2 |
+
+        Between tables.
+
+        ```
+        | Not | A table |
+        | --- | --- |
+        ```
+
+        | C | D |
+        | --- | --- |
+        | 3 | 4 |
+        """
+        let document = QuestionMarkdownDocument(markdown: markdown)
+        XCTAssertEqual(document.blocks.compactMap(\.table).count, 2)
+        XCTAssertEqual(document.blocks.compactMap(\.table).first?.rows, [["1", "2"]])
+        XCTAssertTrue(document.blocks.contains { $0.table == nil && $0.markdown.contains("Not | A table") })
+    }
+
+    func testTableInteractionContextSendsOnlyRelevantRowsOrColumns() {
+        let table = QuestionMarkdownTable(
+            header: ["Language", "Speech", "Information"],
+            rows: [["Serbian", "7.2", "39.1"], ["Spanish", "7.7", "42.0"]],
+            markdown: ""
+        )
+        let rowCell = TableCellReference(row: 2, column: 1, text: "7.7")
+        let rowSelection = TableInteractionSelection(scope: .row, cells: [rowCell], context: "")
+        XCTAssertEqual(table.context(for: rowSelection), "Language\tSpeech\tInformation\nSpanish\t7.7\t42.0")
+
+        let columns = [
+            TableCellReference(row: 1, column: 1, text: "7.2"),
+            TableCellReference(row: 1, column: 2, text: "39.1")
+        ]
+        let columnSelection = TableInteractionSelection(scope: .compareColumns, cells: columns, context: "")
+        XCTAssertEqual(table.context(for: columnSelection), "Speech\tInformation\n7.2\t39.1\n7.7\t42.0")
+    }
+
+    func testMissingChoiceFallbackCopiesOnlyOmittedSourceBlocks() {
+        let source = """
+        Question?
+        A) One
+        B) Two
+        C) Three wraps
+        onto another line.
+        D) Four
+        """
+        let candidate = "Question?\n\nA) One\n\nB) Two"
+        let restored = MissingChoiceFallback.restore(source: source, candidate: candidate)
+        XCTAssertTrue(restored.contains("C) Three wraps\nonto another line."))
+        XCTAssertTrue(restored.hasSuffix("D) Four"))
+        XCTAssertEqual(restored.components(separatedBy: "A) One").count - 1, 1)
+    }
+
+    private func cell(_ text: String, row: Int, column: Int) -> OCRTableCell {
+        OCRTableCell(id: UUID(), text: text, rowStart: row, rowEnd: row, columnStart: column, columnEnd: column, boundingBox: CodableRect(.zero))
+    }
+
     func testGeneratedQuestionRequiresProtocolBlock() {
         let raw = """
         QUESTION_METADATA
         Answer: B
         Type: Math
+        Section: Math
+        Domain: Algebra
+        Skill: Linear equations in one variable
+        Difficulty: medium
+        Confidence: 0.92
         END_QUESTION_METADATA
         FORMATTED_QUESTION
         What is $2 + 2$?
@@ -23,6 +139,10 @@ final class CoreBehaviorTests: XCTestCase {
         XCTAssertEqual(parsed.question, "What is $2 + 2$?\n\nA. 3\nB. 4")
         XCTAssertEqual(parsed.answer, "B")
         XCTAssertEqual(parsed.category, .math)
+        XCTAssertEqual(parsed.learningMetadata.section, .math)
+        XCTAssertEqual(parsed.learningMetadata.domain, "Algebra")
+        XCTAssertEqual(parsed.learningMetadata.skill, "Linear equations in one variable")
+        XCTAssertEqual(parsed.learningMetadata.difficulty, .medium)
         XCTAssertTrue(GeneratedQuestion.parse("unwrapped", requireQuestionBlock: true).question.isEmpty)
     }
 
@@ -50,11 +170,15 @@ final class CoreBehaviorTests: XCTestCase {
     func testAnswerSelectionUpdatesLearningState() {
         let session = makeSession()
         session.correctAnswer = "B. Two"
+        session.learningMetadata.correctAnswerUserConfirmed = true
 
         XCTAssertEqual(TutorSessionMutation.selectAnswer("A", in: session), .incorrect(selected: "A", correct: "B"))
         XCTAssertEqual(session.studyStatus, .mistake)
+        XCTAssertEqual(TutorSessionMutation.selectAnswer("B", in: session), .locked("A"))
+        TutorSessionMutation.beginUnscoredRetry(in: session)
         XCTAssertEqual(TutorSessionMutation.selectAnswer("B", in: session), .correct("B"))
-        XCTAssertEqual(session.studyStatus, .known)
+        XCTAssertEqual(session.studyStatus, .mistake)
+        XCTAssertEqual(session.learningMetadata.attempts.filter(\.countsTowardMastery).count, 1)
     }
 
     @MainActor
@@ -77,6 +201,40 @@ final class CoreBehaviorTests: XCTestCase {
         XCTAssertTrue(secondSaveSucceeded)
         XCTAssertFalse(reopenedStore.sessions.isEmpty)
         reopenedStore.close()
+    }
+
+    @MainActor
+    func testHistoryRoundTripPreservesLearningEvents() async throws {
+        let baseURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tutorclip-learning-roundtrip-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: baseURL) }
+        let session = makeSession()
+        session.learningMetadata.section = .math
+        session.learningMetadata.domain = "Algebra"
+        session.learningMetadata.skill = "Linear equations"
+        SATReviewScheduler.recordAnswer(
+            selectedAnswer: "B",
+            correctAnswer: "B",
+            correct: true,
+            hintUsed: false,
+            metadata: &session.learningMetadata
+        )
+
+        let store = HistoryStore(baseDirectory: baseURL)
+        store.open()
+        let saved = await save(session, in: store)
+        XCTAssertTrue(saved)
+        store.close()
+
+        let reopened = HistoryStore(baseDirectory: baseURL)
+        reopened.open()
+        try await Task.sleep(nanoseconds: 100_000_000)
+        let loaded = reopened.sessions.first
+        XCTAssertEqual(loaded?.learningMetadata.section, .math)
+        XCTAssertEqual(loaded?.learningMetadata.skill, "Linear equations")
+        XCTAssertEqual(loaded?.learningMetadata.attempts.count, 1)
+        XCTAssertEqual(loaded?.learningMetadata.reviews.count, 1)
+        reopened.close()
     }
 
     @MainActor
@@ -313,6 +471,25 @@ final class CoreBehaviorTests: XCTestCase {
     }
 
     @MainActor
+    func testAnswerVerificationRequiresIndependentAgreement() async throws {
+        let agreeing = SequenceDeepSeekStreamer(responses: [
+            "ANSWER_VERIFICATION\nAnswer: A\nConfidence: 0.94\nEvidence: 1900 values are similar and 1950 values diverge.\nEND_ANSWER_VERIFICATION",
+            "ANSWER_VERIFICATION\nAnswer: A\nConfidence: 0.91\nEvidence: France and US separate most between 1900 and 1950.\nEND_ANSWER_VERIFICATION"
+        ])
+        let accepted = try await AnswerVerificationService(client: agreeing, promptBuilder: PromptBuilder())
+            .verify(question: "Question?\n\nA) One\n\nB) Two")
+        XCTAssertEqual(accepted?.answer, "A")
+
+        let conflicting = SequenceDeepSeekStreamer(responses: [
+            "ANSWER_VERIFICATION\nAnswer: A\nConfidence: 0.94\nEvidence: Evidence A.\nEND_ANSWER_VERIFICATION",
+            "ANSWER_VERIFICATION\nAnswer: B\nConfidence: 0.93\nEvidence: Evidence B.\nEND_ANSWER_VERIFICATION"
+        ])
+        let rejected = try await AnswerVerificationService(client: conflicting, promptBuilder: PromptBuilder())
+            .verify(question: "Question?\n\nA) One\n\nB) Two")
+        XCTAssertNil(rejected)
+    }
+
+    @MainActor
     private func save(_ session: TutorSession, in store: HistoryStore) async -> Bool {
         await withCheckedContinuation { continuation in
             store.save(session: session, enabled: true) { success in
@@ -378,5 +555,19 @@ private final class DelayedDeepSeekStreamer: DeepSeekStreaming {
             didCancel = true
             throw CancellationError()
         }
+    }
+}
+
+@MainActor
+private final class SequenceDeepSeekStreamer: DeepSeekStreaming {
+    private var responses: [String]
+
+    init(responses: [String]) {
+        self.responses = responses
+    }
+
+    func stream(messages: [DeepSeekMessage], onToken: @escaping @MainActor (String) -> Void) async throws {
+        guard !responses.isEmpty else { return }
+        onToken(responses.removeFirst())
     }
 }

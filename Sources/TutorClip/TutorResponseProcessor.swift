@@ -23,6 +23,8 @@ enum TutorResponseProcessor {
                 answerSummary: nil,
                 vocabularyCards: parsed.cards
             )
+        case .guidedLearning:
+            return ProcessedTutorResponse(content: rawContent, answerSummary: nil, vocabularyCards: [])
         default:
             return ProcessedTutorResponse(
                 content: rawContent,

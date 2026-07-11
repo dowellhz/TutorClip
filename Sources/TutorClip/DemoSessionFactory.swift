@@ -67,7 +67,7 @@ enum DemoSessionFactory {
         return words.map { word in
             let width = lineBox.width * CGFloat(word.count) / CGFloat(total)
             defer { x += width }
-            return OCRToken(id: UUID(), text: word, boundingBox: CodableRect(CGRect(x: x, y: lineBox.minY, width: width, height: lineBox.height)), confidence: 1)
+            return OCRToken(id: UUID(), text: word, boundingBox: CodableRect(CGRect(x: x, y: lineBox.minY, width: width, height: lineBox.height)), confidence: 1, isLikelyUnderlined: nil)
         }
     }
 

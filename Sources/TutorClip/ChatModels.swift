@@ -13,6 +13,7 @@ struct ChatMessage: Codable, Identifiable, Equatable {
     var content: String
     var createdAt: Date
     var actionType: TutorAction?
+    var contextDocumentID: UUID? = nil
 }
 
 struct AnswerSummary: Equatable {

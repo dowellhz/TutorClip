@@ -5,12 +5,17 @@ APP_DIR := $(BUILD_DIR)/$(APP_NAME).app
 LOCAL_APP_DIR := $(HOME)/Applications/$(APP_NAME).app
 XCODE_DERIVED_DATA := .xcode-derived
 XCODE_APP_DIR := $(XCODE_DERIVED_DATA)/Build/Products/Debug/$(APP_NAME).app
+RELEASE_APP_DIR := $(XCODE_DERIVED_DATA)/Build/Products/Release/$(APP_NAME).app
+RELEASE_DIR := $(BUILD_DIR)/release
+RELEASE_DMG := $(RELEASE_DIR)/$(APP_NAME).dmg
+DEVELOPER_ID ?= Developer ID Application: lu lin ($(DEVELOPMENT_TEAM))
+NOTARY_PROFILE ?= TutorClip
 CONTENTS_DIR := $(APP_DIR)/Contents
 MACOS_DIR := $(CONTENTS_DIR)/MacOS
 RESOURCES_DIR := $(CONTENTS_DIR)/Resources
 SOURCES := $(shell find Sources/TutorClip -name '*.swift' | sort)
 
-.PHONY: all build test xcode-build xcode-build-signed install-current-signed-local install-signed-local run-signed-local run-signed-demo-local diagnose-signed-local diagnose-app-signed-local request-permissions-signed-local xcode-run xcode-run-signed xcode-run-demo xcode-run-demo-signed xcode-diagnose xcode-diagnose-signed xcode-request-permissions xcode-request-permissions-signed verify-signed run run-demo install-local run-local diagnose request-permissions verify clean
+.PHONY: all build test xcode-build xcode-build-signed release-app package-dmg notarize-dmg release-notarized install-current-signed-local install-signed-local run-signed-local run-signed-demo-local diagnose-signed-local diagnose-app-signed-local request-permissions-signed-local xcode-run xcode-run-signed xcode-run-demo xcode-run-demo-signed xcode-diagnose xcode-diagnose-signed xcode-request-permissions xcode-request-permissions-signed verify-signed verify-table-ai run run-demo install-local run-local diagnose request-permissions verify clean
 
 all: xcode-build
 
@@ -31,6 +36,24 @@ xcode-build:
 
 xcode-build-signed:
 	xcodebuild -project $(APP_NAME).xcodeproj -scheme $(APP_NAME) -configuration Debug -destination 'platform=macOS,arch=arm64' -derivedDataPath "$(XCODE_DERIVED_DATA)" build DEVELOPMENT_TEAM="$(DEVELOPMENT_TEAM)" CODE_SIGN_STYLE=Automatic -allowProvisioningUpdates ONLY_ACTIVE_ARCH=YES ARCHS=arm64
+
+release-app:
+	xcodebuild -project $(APP_NAME).xcodeproj -scheme $(APP_NAME) -configuration Release -destination 'platform=macOS,arch=arm64' -derivedDataPath "$(XCODE_DERIVED_DATA)" build DEVELOPMENT_TEAM="$(DEVELOPMENT_TEAM)" CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="$(DEVELOPER_ID)" ENABLE_HARDENED_RUNTIME=YES OTHER_CODE_SIGN_FLAGS="--timestamp"
+	codesign --force --deep --options runtime --timestamp --sign "$(DEVELOPER_ID)" "$(RELEASE_APP_DIR)"
+	codesign --verify --deep --strict --verbose=2 "$(RELEASE_APP_DIR)"
+	codesign -dv --verbose=4 "$(RELEASE_APP_DIR)" 2>&1 | rg "Authority=Developer ID Application|TeamIdentifier=$(DEVELOPMENT_TEAM)|Runtime Version"
+
+package-dmg: release-app
+	./Scripts/package_release.sh "$(RELEASE_APP_DIR)" "$(RELEASE_DMG)" "$(DEVELOPER_ID)"
+
+notarize-dmg:
+	test -f "$(RELEASE_DMG)"
+	xcrun notarytool submit "$(RELEASE_DMG)" --keychain-profile "$(NOTARY_PROFILE)" --wait
+	xcrun stapler staple "$(RELEASE_DMG)"
+	xcrun stapler validate "$(RELEASE_DMG)"
+	spctl --assess --type open --context context:primary-signature --verbose=4 "$(RELEASE_DMG)"
+
+release-notarized: package-dmg notarize-dmg
 
 install-current-signed-local:
 	codesign -dv "$(XCODE_APP_DIR)" 2>&1 | rg "TeamIdentifier=$(DEVELOPMENT_TEAM)"
@@ -120,6 +143,10 @@ request-permissions: install-local
 
 verify:
 	./Scripts/verify_static.sh
+
+verify-table-ai: xcode-build
+	test -n "$(IMAGE)"
+	"$(XCODE_APP_DIR)/Contents/MacOS/$(APP_NAME)" --probe-table-image "$(IMAGE)" $(if $(EXPECTED_ANSWER),--expected-answer "$(EXPECTED_ANSWER)") $(if $(EXPECTED_TITLE),--expected-title "$(EXPECTED_TITLE)")
 
 verify-signed: xcode-build-signed
 	codesign --verify --deep --strict "$(XCODE_APP_DIR)"

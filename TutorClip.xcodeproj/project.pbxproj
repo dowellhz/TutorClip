@@ -7,6 +7,7 @@
 
 /* Begin PBXBuildFile section */
 		C0DE00000000000000000015 /* InfrastructureBehaviorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000016 /* InfrastructureBehaviorTests.swift */; };
+		C0DE00000000000000000017 /* SATLearningTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000018 /* SATLearningTests.swift */; };
 		C0DE00000000000000000013 /* AsyncTimeoutRace.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000014 /* AsyncTimeoutRace.swift */; };
 		C0DE00000000000000000011 /* RuntimeLogFileWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000012 /* RuntimeLogFileWriter.swift */; };
 		C0DE0000000000000000000F /* OCRRequestLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE00000000000000000010 /* OCRRequestLifecycle.swift */; };
@@ -27,6 +28,30 @@
 		4918D4E307592CACB65D1F4E /* DeepSeekClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19EB50273634289ABFECDF0B /* DeepSeekClient.swift */; };
 		EAC6CAC9DD55441F6B24C353 /* DemoSessionFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F30BF5AD8EA55EE79370802 /* DemoSessionFactory.swift */; };
 		9A7C4E10B19F4DDA83C7F005 /* GeneratedQuestion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7C4E10B19F4DDA83C7F004 /* GeneratedQuestion.swift */; };
+		A4D150100000000000000001 /* PracticeVariationPlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D150100000000000000002 /* PracticeVariationPlanner.swift */; };
+		A4D150100000000000000003 /* SATLearningMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D150100000000000000004 /* SATLearningMetadata.swift */; };
+		A4D150100000000000000005 /* TutorLearningActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D150100000000000000006 /* TutorLearningActions.swift */; };
+		A4D150100000000000000007 /* SATLearningStateMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D150100000000000000008 /* SATLearningStateMachine.swift */; };
+		A4D150100000000000000009 /* PracticeQuestionValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D15010000000000000000A /* PracticeQuestionValidator.swift */; };
+		A4D15010000000000000000B /* SATLearningAnalytics.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D15010000000000000000C /* SATLearningAnalytics.swift */; };
+		A4D150100000000000000013 /* SATKnowledgeCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D150100000000000000014 /* SATKnowledgeCatalog.swift */; };
+		A4D150100000000000000015 /* KnowledgeMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D150100000000000000016 /* KnowledgeMapView.swift */; };
+		A4D15010000000000000000D /* SATNeedsReviewFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D15010000000000000000E /* SATNeedsReviewFlow.swift */; };
+		A4D15010000000000000000F /* NeedsReviewGuidanceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D150100000000000000010 /* NeedsReviewGuidanceView.swift */; };
+		A4D150100000000000000011 /* TutorViewModelPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D150100000000000000012 /* TutorViewModelPresentation.swift */; };
+		A4D150100000000000000017 /* TutorQuestionApplication.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D150100000000000000018 /* TutorQuestionApplication.swift */; };
+		A4D150100000000000000019 /* InteractiveQuestionMarkdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D15010000000000000001A /* InteractiveQuestionMarkdownView.swift */; };
+		A4D15010000000000000001B /* TableImageDiagnostic.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D15010000000000000001C /* TableImageDiagnostic.swift */; };
+		A4D15010000000000000001D /* QuestionMarkdownDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D15010000000000000001E /* QuestionMarkdownDocument.swift */; };
+		A4D15010000000000000001F /* SelectableMarkdownBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D150100000000000000020 /* SelectableMarkdownBlockView.swift */; };
+		A4D150100000000000000021 /* TableFormattingAuditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D150100000000000000022 /* TableFormattingAuditor.swift */; };
+		A4D150100000000000000023 /* MissingChoiceFallback.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D150100000000000000024 /* MissingChoiceFallback.swift */; };
+		A4D150100000000000000025 /* TutorViewModelTableActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D150100000000000000026 /* TutorViewModelTableActions.swift */; };
+		A4D150100000000000000027 /* HistoryViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D150100000000000000028 /* HistoryViewModel.swift */; };
+		A4D150100000000000000029 /* HistoryDatabaseWorker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D15010000000000000002A /* HistoryDatabaseWorker.swift */; };
+		A4D15010000000000000002B /* OCRFormattingController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D15010000000000000002C /* OCRFormattingController.swift */; };
+		A4D15010000000000000002D /* AnswerVerificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D15010000000000000002E /* AnswerVerificationService.swift */; };
+		A4D15010000000000000002F /* PromptBuilderAnswerVerification.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D150100000000000000030 /* PromptBuilderAnswerVerification.swift */; };
 			9A7C4E10B19F4DDA83C7F007 /* SelectableMarkdownTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7C4E10B19F4DDA83C7F006 /* SelectableMarkdownTextView.swift */; };
 			15D19B86755E80AAD4240A1B /* DiagnosticCLI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83F363BF4DA5A679836ADB62 /* DiagnosticCLI.swift */; };
 			7C12D4A901234BCCA0200001 /* DiagnosticHistoryProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C12D4A901234BCCA0200002 /* DiagnosticHistoryProbe.swift */; };
@@ -71,6 +96,9 @@
 
 /* Begin PBXFileReference section */
 		C0DE00000000000000000016 /* InfrastructureBehaviorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InfrastructureBehaviorTests.swift; sourceTree = "<group>"; };
+		A4D15010000000000000002E /* AnswerVerificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnswerVerificationService.swift; sourceTree = "<group>"; };
+		A4D150100000000000000030 /* PromptBuilderAnswerVerification.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptBuilderAnswerVerification.swift; sourceTree = "<group>"; };
+		C0DE00000000000000000018 /* SATLearningTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SATLearningTests.swift; sourceTree = "<group>"; };
 		C0DE00000000000000000014 /* AsyncTimeoutRace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AsyncTimeoutRace.swift; sourceTree = "<group>"; };
 		C0DE00000000000000000012 /* RuntimeLogFileWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeLogFileWriter.swift; sourceTree = "<group>"; };
 		C0DE00000000000000000010 /* OCRRequestLifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCRRequestLifecycle.swift; sourceTree = "<group>"; };
@@ -93,6 +121,28 @@
 		19EB50273634289ABFECDF0B /* DeepSeekClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepSeekClient.swift; sourceTree = "<group>"; };
 		4F30BF5AD8EA55EE79370802 /* DemoSessionFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoSessionFactory.swift; sourceTree = "<group>"; };
 		9A7C4E10B19F4DDA83C7F004 /* GeneratedQuestion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneratedQuestion.swift; sourceTree = "<group>"; };
+		A4D150100000000000000002 /* PracticeVariationPlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PracticeVariationPlanner.swift; sourceTree = "<group>"; };
+		A4D150100000000000000004 /* SATLearningMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SATLearningMetadata.swift; sourceTree = "<group>"; };
+		A4D150100000000000000006 /* TutorLearningActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorLearningActions.swift; sourceTree = "<group>"; };
+		A4D150100000000000000008 /* SATLearningStateMachine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SATLearningStateMachine.swift; sourceTree = "<group>"; };
+		A4D15010000000000000000A /* PracticeQuestionValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PracticeQuestionValidator.swift; sourceTree = "<group>"; };
+		A4D15010000000000000000C /* SATLearningAnalytics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SATLearningAnalytics.swift; sourceTree = "<group>"; };
+		A4D150100000000000000014 /* SATKnowledgeCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SATKnowledgeCatalog.swift; sourceTree = "<group>"; };
+		A4D150100000000000000016 /* KnowledgeMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeMapView.swift; sourceTree = "<group>"; };
+		A4D15010000000000000000E /* SATNeedsReviewFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SATNeedsReviewFlow.swift; sourceTree = "<group>"; };
+		A4D150100000000000000010 /* NeedsReviewGuidanceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NeedsReviewGuidanceView.swift; sourceTree = "<group>"; };
+		A4D150100000000000000012 /* TutorViewModelPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorViewModelPresentation.swift; sourceTree = "<group>"; };
+		A4D150100000000000000018 /* TutorQuestionApplication.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorQuestionApplication.swift; sourceTree = "<group>"; };
+		A4D15010000000000000001A /* InteractiveQuestionMarkdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InteractiveQuestionMarkdownView.swift; sourceTree = "<group>"; };
+		A4D15010000000000000001C /* TableImageDiagnostic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TableImageDiagnostic.swift; sourceTree = "<group>"; };
+		A4D15010000000000000001E /* QuestionMarkdownDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuestionMarkdownDocument.swift; sourceTree = "<group>"; };
+		A4D150100000000000000020 /* SelectableMarkdownBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectableMarkdownBlockView.swift; sourceTree = "<group>"; };
+		A4D150100000000000000022 /* TableFormattingAuditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TableFormattingAuditor.swift; sourceTree = "<group>"; };
+		A4D150100000000000000024 /* MissingChoiceFallback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MissingChoiceFallback.swift; sourceTree = "<group>"; };
+		A4D150100000000000000026 /* TutorViewModelTableActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorViewModelTableActions.swift; sourceTree = "<group>"; };
+		A4D150100000000000000028 /* HistoryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryViewModel.swift; sourceTree = "<group>"; };
+		A4D15010000000000000002A /* HistoryDatabaseWorker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryDatabaseWorker.swift; sourceTree = "<group>"; };
+		A4D15010000000000000002C /* OCRFormattingController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCRFormattingController.swift; sourceTree = "<group>"; };
 			9A7C4E10B19F4DDA83C7F006 /* SelectableMarkdownTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectableMarkdownTextView.swift; sourceTree = "<group>"; };
 			83F363BF4DA5A679836ADB62 /* DiagnosticCLI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticCLI.swift; sourceTree = "<group>"; };
 			7C12D4A901234BCCA0200002 /* DiagnosticHistoryProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticHistoryProbe.swift; sourceTree = "<group>"; };
@@ -142,7 +192,7 @@
 
 /* Begin PBXGroup section */
 		5928955287B8089ED2177128 = {isa = PBXGroup; children = ( D2553A7ED56BB6FA7D4ED2BF /* TutorClip */, C0DE00000000000000000005 /* TutorClipTests */, 5727A91BB6A4B3BD2A129604 /* Resources */, BF7A2D27A78D590BDEF15AF2 /* Products */, ); sourceTree = "<group>"; };
-		C0DE00000000000000000005 /* TutorClipTests */ = {isa = PBXGroup; children = ( C0DE00000000000000000002 /* CoreBehaviorTests.swift */, C0DE00000000000000000016 /* InfrastructureBehaviorTests.swift */, ); path = Tests/TutorClipTests; sourceTree = "<group>"; };
+		C0DE00000000000000000005 /* TutorClipTests */ = {isa = PBXGroup; children = ( C0DE00000000000000000002 /* CoreBehaviorTests.swift */, C0DE00000000000000000016 /* InfrastructureBehaviorTests.swift */, C0DE00000000000000000018 /* SATLearningTests.swift */, ); path = Tests/TutorClipTests; sourceTree = "<group>"; };
 		D2553A7ED56BB6FA7D4ED2BF /* TutorClip */ = {isa = PBXGroup; children = (
 			C0DE00000000000000000014 /* AsyncTimeoutRace.swift */,
 			C0DE00000000000000000012 /* RuntimeLogFileWriter.swift */,
@@ -158,6 +208,18 @@
 			19EB50273634289ABFECDF0B /* DeepSeekClient.swift */,
 				4F30BF5AD8EA55EE79370802 /* DemoSessionFactory.swift */,
 				9A7C4E10B19F4DDA83C7F004 /* GeneratedQuestion.swift */,
+				A4D150100000000000000002 /* PracticeVariationPlanner.swift */,
+				A4D150100000000000000004 /* SATLearningMetadata.swift */,
+				A4D150100000000000000006 /* TutorLearningActions.swift */,
+				A4D150100000000000000008 /* SATLearningStateMachine.swift */,
+				A4D15010000000000000000A /* PracticeQuestionValidator.swift */,
+				A4D15010000000000000000C /* SATLearningAnalytics.swift */,
+				A4D150100000000000000014 /* SATKnowledgeCatalog.swift */,
+				A4D150100000000000000016 /* KnowledgeMapView.swift */,
+				A4D15010000000000000000E /* SATNeedsReviewFlow.swift */,
+				A4D150100000000000000010 /* NeedsReviewGuidanceView.swift */,
+				A4D150100000000000000012 /* TutorViewModelPresentation.swift */,
+				A4D150100000000000000018 /* TutorQuestionApplication.swift */,
 				83F363BF4DA5A679836ADB62 /* DiagnosticCLI.swift */,
 				7C12D4A901234BCCA0200002 /* DiagnosticHistoryProbe.swift */,
 				7C12D4A901234BCCC0400002 /* DiagnosticSessionProbe.swift */,
@@ -165,12 +227,24 @@
 				7C12D4A901234BCCB0300002 /* DiagnosticUIProbe.swift */,
 				D564A3512A0AD78B6370A2A5 /* DiagnosticsService.swift */,
 			26C5863DF04B04941D644E1F /* HistoryStore.swift */,
+			A4D15010000000000000002A /* HistoryDatabaseWorker.swift */,
 			8AEAB2C46BB0B6B22E3C9BAF /* HistoryView.swift */,
+			A4D150100000000000000028 /* HistoryViewModel.swift */,
 			4E4F5B7C8D9A4B11A0100102 /* LatexDisplayNormalizer.swift */,
+			A4D15010000000000000001A /* InteractiveQuestionMarkdownView.swift */,
+			A4D15010000000000000001C /* TableImageDiagnostic.swift */,
+			A4D15010000000000000001E /* QuestionMarkdownDocument.swift */,
+			A4D150100000000000000020 /* SelectableMarkdownBlockView.swift */,
+			A4D150100000000000000022 /* TableFormattingAuditor.swift */,
+			A4D150100000000000000024 /* MissingChoiceFallback.swift */,
+			A4D150100000000000000026 /* TutorViewModelTableActions.swift */,
 			A94E5173853C3E411F56DBEE /* MenuBarController.swift */,
 			9026B31C9FB9E57309BEC112 /* Models.swift */,
 			8B6D0A4E3C9F11EBA1111004 /* OCRModels.swift */,
 			29E94D61BC76396734667312 /* OCRLayoutService.swift */,
+			A4D15010000000000000002C /* OCRFormattingController.swift */,
+			A4D15010000000000000002E /* AnswerVerificationService.swift */,
+			A4D150100000000000000030 /* PromptBuilderAnswerVerification.swift */,
 			16CEA17C1EF7F4417A467137 /* OCRService.swift */,
 			A1AFB82D3FC0B7E463FB0341 /* OCRTextView.swift */,
 			DAEA2329FF0C7E7E3EB5BD8A /* PermissionService.swift */,
@@ -229,9 +303,11 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		C0DE0000000000000000000A /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = ( C0DE00000000000000000001 /* CoreBehaviorTests.swift in Sources */, C0DE00000000000000000015 /* InfrastructureBehaviorTests.swift in Sources */, ); runOnlyForDeploymentPostprocessing = 0; };
+		C0DE0000000000000000000A /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = ( C0DE00000000000000000001 /* CoreBehaviorTests.swift in Sources */, C0DE00000000000000000015 /* InfrastructureBehaviorTests.swift in Sources */, C0DE00000000000000000017 /* SATLearningTests.swift in Sources */, ); runOnlyForDeploymentPostprocessing = 0; };
 		E7209FB05162B7572F88D05E /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
 			C0DE00000000000000000011 /* RuntimeLogFileWriter.swift in Sources */,
+			A4D15010000000000000002D /* AnswerVerificationService.swift in Sources */,
+			A4D15010000000000000002F /* PromptBuilderAnswerVerification.swift in Sources */,
 			C0DE00000000000000000013 /* AsyncTimeoutRace.swift in Sources */,
 			C0DE0000000000000000000F /* OCRRequestLifecycle.swift in Sources */,
 			C0DE0000000000000000000D /* TutorRequestLifecycle.swift in Sources */,
@@ -245,6 +321,25 @@
 			4918D4E307592CACB65D1F4E /* DeepSeekClient.swift in Sources */,
 			EAC6CAC9DD55441F6B24C353 /* DemoSessionFactory.swift in Sources */,
 			9A7C4E10B19F4DDA83C7F005 /* GeneratedQuestion.swift in Sources */,
+			A4D150100000000000000001 /* PracticeVariationPlanner.swift in Sources */,
+			A4D150100000000000000003 /* SATLearningMetadata.swift in Sources */,
+			A4D150100000000000000005 /* TutorLearningActions.swift in Sources */,
+			A4D150100000000000000007 /* SATLearningStateMachine.swift in Sources */,
+			A4D150100000000000000009 /* PracticeQuestionValidator.swift in Sources */,
+			A4D15010000000000000000B /* SATLearningAnalytics.swift in Sources */,
+			A4D150100000000000000013 /* SATKnowledgeCatalog.swift in Sources */,
+			A4D150100000000000000015 /* KnowledgeMapView.swift in Sources */,
+			A4D15010000000000000000D /* SATNeedsReviewFlow.swift in Sources */,
+			A4D15010000000000000000F /* NeedsReviewGuidanceView.swift in Sources */,
+			A4D150100000000000000011 /* TutorViewModelPresentation.swift in Sources */,
+			A4D150100000000000000017 /* TutorQuestionApplication.swift in Sources */,
+			A4D150100000000000000019 /* InteractiveQuestionMarkdownView.swift in Sources */,
+			A4D15010000000000000001B /* TableImageDiagnostic.swift in Sources */,
+			A4D15010000000000000001D /* QuestionMarkdownDocument.swift in Sources */,
+			A4D15010000000000000001F /* SelectableMarkdownBlockView.swift in Sources */,
+			A4D150100000000000000021 /* TableFormattingAuditor.swift in Sources */,
+			A4D150100000000000000023 /* MissingChoiceFallback.swift in Sources */,
+			A4D150100000000000000025 /* TutorViewModelTableActions.swift in Sources */,
 				9A7C4E10B19F4DDA83C7F007 /* SelectableMarkdownTextView.swift in Sources */,
 				15D19B86755E80AAD4240A1B /* DiagnosticCLI.swift in Sources */,
 				7C12D4A901234BCCA0200001 /* DiagnosticHistoryProbe.swift in Sources */,
@@ -253,12 +348,15 @@
 				7C12D4A901234BCCB0300001 /* DiagnosticUIProbe.swift in Sources */,
 				03DB0FE86ABBD4236EE9DDAB /* DiagnosticsService.swift in Sources */,
 			C6155BD7C045C96D7A2B94E7 /* HistoryStore.swift in Sources */,
+			A4D150100000000000000029 /* HistoryDatabaseWorker.swift in Sources */,
 			6D7BEF74C33D021ABCDBEE2D /* HistoryView.swift in Sources */,
+			A4D150100000000000000027 /* HistoryViewModel.swift in Sources */,
 			4E4F5B7C8D9A4B11A0100101 /* LatexDisplayNormalizer.swift in Sources */,
 			FA843788FDE9E760D5E529AD /* MenuBarController.swift in Sources */,
 			3F2EFD6D7F706F9890AE6246 /* Models.swift in Sources */,
 			8B6D0A4E3C9F11EBA1110004 /* OCRModels.swift in Sources */,
 			04D511E954D74A5F080F652A /* OCRLayoutService.swift in Sources */,
+			A4D15010000000000000002B /* OCRFormattingController.swift in Sources */,
 			7F42D38FA23342BF3251296C /* OCRService.swift in Sources */,
 			A8540B9622B17BCBE05D8D61 /* OCRTextView.swift in Sources */,
 			BA927DB216166FF834F5F1D0 /* PermissionService.swift in Sources */,
@@ -293,12 +391,12 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
-		C0DE0000000000000000000B /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = T84BKD53ZD; GENERATE_INFOPLIST_FILE = YES; MACOSX_DEPLOYMENT_TARGET = 14.0; OTHER_LDFLAGS = "-lsqlite3"; PRODUCT_BUNDLE_IDENTIFIER = com.linlu.TutorClipTests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TutorClip.app/Contents/MacOS/TutorClip"; BUNDLE_LOADER = "$(TEST_HOST)"; }; name = Debug; };
-		C0DE0000000000000000000C /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = T84BKD53ZD; GENERATE_INFOPLIST_FILE = YES; MACOSX_DEPLOYMENT_TARGET = 14.0; OTHER_LDFLAGS = "-lsqlite3"; PRODUCT_BUNDLE_IDENTIFIER = com.linlu.TutorClipTests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TutorClip.app/Contents/MacOS/TutorClip"; BUNDLE_LOADER = "$(TEST_HOST)"; }; name = Release; };
-		EC86DC4F4B4C60C3EC031655 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; CLANG_WARN_DOCUMENTATION_COMMENTS = YES; COPY_PHASE_STRIP = NO; DEBUG_INFORMATION_FORMAT = dwarf; ENABLE_STRICT_OBJC_MSGSEND = YES; GCC_C_LANGUAGE_STANDARD = gnu17; MACOSX_DEPLOYMENT_TARGET = 14.0; SDKROOT = macosx; SWIFT_VERSION = 5.0; }; name = Debug; };
-		7BF40F069D95C38DE60AA602 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; CLANG_WARN_DOCUMENTATION_COMMENTS = YES; COPY_PHASE_STRIP = NO; DEBUG_INFORMATION_FORMAT = dwarf; ENABLE_STRICT_OBJC_MSGSEND = YES; GCC_C_LANGUAGE_STANDARD = gnu17; MACOSX_DEPLOYMENT_TARGET = 14.0; SDKROOT = macosx; SWIFT_VERSION = 5.0; }; name = Release; };
-		8CBC338D09B9279147FBD852 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_IDENTITY = "Apple Development"; CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = T84BKD53ZD; ENABLE_TESTABILITY = YES; INFOPLIST_FILE = Resources/Info.plist; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks"; MACOSX_DEPLOYMENT_TARGET = 14.0; OTHER_LDFLAGS = "-lsqlite3"; PRODUCT_BUNDLE_IDENTIFIER = com.linlu.TutorClip; PRODUCT_NAME = TutorClip; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; SWIFT_VERSION = 5.0; }; name = Debug; };
-		C286FC8B91125F435CB47F15 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_IDENTITY = "Apple Development"; CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = T84BKD53ZD; INFOPLIST_FILE = Resources/Info.plist; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks"; MACOSX_DEPLOYMENT_TARGET = 14.0; OTHER_LDFLAGS = "-lsqlite3"; PRODUCT_BUNDLE_IDENTIFIER = com.linlu.TutorClip; PRODUCT_NAME = TutorClip; SWIFT_VERSION = 5.0; }; name = Release; };
+		C0DE0000000000000000000B /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = T84BKD53ZD; GENERATE_INFOPLIST_FILE = YES; MACOSX_DEPLOYMENT_TARGET = 26.0; OTHER_LDFLAGS = "-lsqlite3"; PRODUCT_BUNDLE_IDENTIFIER = com.linlu.TutorClipTests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TutorClip.app/Contents/MacOS/TutorClip"; BUNDLE_LOADER = "$(TEST_HOST)"; }; name = Debug; };
+		C0DE0000000000000000000C /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = T84BKD53ZD; GENERATE_INFOPLIST_FILE = YES; MACOSX_DEPLOYMENT_TARGET = 26.0; OTHER_LDFLAGS = "-lsqlite3"; PRODUCT_BUNDLE_IDENTIFIER = com.linlu.TutorClipTests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TutorClip.app/Contents/MacOS/TutorClip"; BUNDLE_LOADER = "$(TEST_HOST)"; }; name = Release; };
+		EC86DC4F4B4C60C3EC031655 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; CLANG_WARN_DOCUMENTATION_COMMENTS = YES; COPY_PHASE_STRIP = NO; DEBUG_INFORMATION_FORMAT = dwarf; ENABLE_STRICT_OBJC_MSGSEND = YES; GCC_C_LANGUAGE_STANDARD = gnu17; MACOSX_DEPLOYMENT_TARGET = 26.0; SDKROOT = macosx; SWIFT_VERSION = 5.0; }; name = Debug; };
+		7BF40F069D95C38DE60AA602 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; CLANG_WARN_DOCUMENTATION_COMMENTS = YES; COPY_PHASE_STRIP = NO; DEBUG_INFORMATION_FORMAT = dwarf; ENABLE_STRICT_OBJC_MSGSEND = YES; GCC_C_LANGUAGE_STANDARD = gnu17; MACOSX_DEPLOYMENT_TARGET = 26.0; SDKROOT = macosx; SWIFT_VERSION = 5.0; }; name = Release; };
+		8CBC338D09B9279147FBD852 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_IDENTITY = "Apple Development"; CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = T84BKD53ZD; ENABLE_TESTABILITY = YES; INFOPLIST_FILE = Resources/Info.plist; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks"; MACOSX_DEPLOYMENT_TARGET = 26.0; OTHER_LDFLAGS = "-lsqlite3"; PRODUCT_BUNDLE_IDENTIFIER = com.linlu.TutorClip; PRODUCT_NAME = TutorClip; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; SWIFT_VERSION = 5.0; }; name = Debug; };
+		C286FC8B91125F435CB47F15 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_IDENTITY = "Apple Development"; CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = T84BKD53ZD; INFOPLIST_FILE = Resources/Info.plist; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks"; MACOSX_DEPLOYMENT_TARGET = 26.0; OTHER_LDFLAGS = "-lsqlite3"; PRODUCT_BUNDLE_IDENTIFIER = com.linlu.TutorClip; PRODUCT_NAME = TutorClip; SWIFT_VERSION = 5.0; }; name = Release; };
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */

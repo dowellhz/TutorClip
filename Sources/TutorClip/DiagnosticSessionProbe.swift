@@ -74,14 +74,18 @@ extension DiagnosticCLI {
             category: .reading,
             correctAnswer: "B"
         )
+        session.learningMetadata.correctAnswerUserConfirmed = true
         let choices = TutorQuestionParsing.answerChoices(from: session.ocrDocument.editedText)
         let wrong = TutorSessionMutation.selectAnswer("C", in: session)
         let wrongState = session.studyStatus == StudyStatus.mistake
             && session.selectedAnswer == "C"
             && wrong == .incorrect(selected: "C", correct: "B")
+        let locked = TutorSessionMutation.selectAnswer("b", in: session)
+        TutorSessionMutation.beginUnscoredRetry(in: session)
         let correct = TutorSessionMutation.selectAnswer("b", in: session)
-        let correctState = session.studyStatus == StudyStatus.known
+        let correctState = session.studyStatus == StudyStatus.mistake
             && session.selectedAnswer == "B"
+            && locked == .locked("C")
             && correct == .correct("B")
         let result = TutorSessionMutation.answerSelectionResult(selected: session.selectedAnswer, correct: session.correctAnswer)
         print("choices=\(choices.joined())")

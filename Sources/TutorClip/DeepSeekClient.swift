@@ -3,6 +3,13 @@ import Foundation
 @MainActor
 protocol DeepSeekStreaming {
     func stream(messages: [DeepSeekMessage], onToken: @escaping @MainActor (String) -> Void) async throws
+    func stream(messages: [DeepSeekMessage], temperatureOverride: Double?, onToken: @escaping @MainActor (String) -> Void) async throws
+}
+
+extension DeepSeekStreaming {
+    func stream(messages: [DeepSeekMessage], temperatureOverride: Double?, onToken: @escaping @MainActor (String) -> Void) async throws {
+        try await stream(messages: messages, onToken: onToken)
+    }
 }
 
 enum DeepSeekError: LocalizedError {
@@ -39,6 +46,10 @@ final class DeepSeekClient: DeepSeekStreaming {
     }
 
     func stream(messages: [DeepSeekMessage], onToken: @escaping @MainActor (String) -> Void) async throws {
+        try await stream(messages: messages, temperatureOverride: nil, onToken: onToken)
+    }
+
+    func stream(messages: [DeepSeekMessage], temperatureOverride: Double?, onToken: @escaping @MainActor (String) -> Void) async throws {
         let config = configLoader.currentConfig(settings: settingsStore.settings)
         let language = settingsStore.settings.appLanguage
         guard let apiKey = config.apiKey, !apiKey.isEmpty else {
@@ -57,7 +68,7 @@ final class DeepSeekClient: DeepSeekStreaming {
         let body = DeepSeekRequest(
             model: config.model,
             messages: messages,
-            temperature: settingsStore.settings.temperature,
+            temperature: temperatureOverride ?? settingsStore.settings.temperature,
             stream: true
         )
         request.httpBody = try JSONEncoder().encode(body)

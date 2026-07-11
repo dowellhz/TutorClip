@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import ServiceManagement
 
@@ -82,6 +83,31 @@ final class SettingsViewModel: ObservableObject {
 
     func configPath() -> String {
         configLoader.configFilePath()
+    }
+
+    func persistAPIKeyToConfig() {
+        configLoader.temporaryAPIKey = temporaryAPIKey
+        do {
+            try configLoader.persistTemporaryAPIKey(settings: settings)
+            keySource = configLoader.currentConfig(settings: settings).keySource.rawValue
+            saveStatusMessage = settings.appLanguage.text("API Key 已保存到本地配置。", "API Key saved to local config.")
+            saveStatusIsError = false
+        } catch {
+            saveStatusMessage = settings.appLanguage.text("API Key 保存失败：\(error.localizedDescription)", "Failed to save API Key: \(error.localizedDescription)")
+            saveStatusIsError = true
+        }
+    }
+
+    func removeAPIKeyFromConfig() {
+        do {
+            try configLoader.removePersistedAPIKey()
+            keySource = configLoader.currentConfig(settings: settings).keySource.rawValue
+            saveStatusMessage = settings.appLanguage.text("本地配置中的 API Key 已删除。", "API Key removed from local config.")
+            saveStatusIsError = false
+        } catch {
+            saveStatusMessage = settings.appLanguage.text("API Key 删除失败：\(error.localizedDescription)", "Failed to remove API Key: \(error.localizedDescription)")
+            saveStatusIsError = true
+        }
     }
 
     func refreshPermissions() {
@@ -206,66 +232,3 @@ final class SettingsViewModel: ObservableObject {
     }
 }
 
-@MainActor
-final class HistoryViewModel: ObservableObject {
-    @Published var query: String = ""
-    @Published var operationStatusMessage: String = ""
-    @Published var operationStatusIsError: Bool = false
-    @Published private(set) var deletingSessionIDs: Set<UUID> = []
-    @Published private(set) var isClearingHistory: Bool = false
-    private let settingsStore: SettingsStore
-    private let historyStore: HistoryStore
-    private let onOpen: (TutorSession) -> Void
-
-    init(settingsStore: SettingsStore, historyStore: HistoryStore, onOpen: @escaping (TutorSession) -> Void) {
-        self.settingsStore = settingsStore
-        self.historyStore = historyStore
-        self.onOpen = onOpen
-    }
-
-    var language: AppLanguage {
-        settingsStore.settings.appLanguage
-    }
-
-    var sessions: [TutorSession] {
-        historyStore.search(query)
-    }
-
-    func open(_ session: TutorSession) {
-        onOpen(session)
-    }
-
-    func delete(_ session: TutorSession) {
-        guard !deletingSessionIDs.contains(session.id) else { return }
-        deletingSessionIDs.insert(session.id)
-        operationStatusMessage = language.text("正在删除…", "Deleting…")
-        operationStatusIsError = false
-        historyStore.delete(sessionID: session.id) { [weak self] success in
-            guard let self else { return }
-            self.deletingSessionIDs.remove(session.id)
-            self.operationStatusIsError = !success
-            self.operationStatusMessage = success
-                ? self.language.text("记录已删除。", "History item deleted.")
-                : self.language.text("删除失败，请查看运行日志。", "Delete failed. Check the runtime log.")
-        }
-    }
-
-    func clear() {
-        guard !isClearingHistory else { return }
-        isClearingHistory = true
-        operationStatusMessage = language.text("正在清空历史…", "Clearing history…")
-        operationStatusIsError = false
-        historyStore.clear { [weak self] success in
-            guard let self else { return }
-            self.isClearingHistory = false
-            self.operationStatusIsError = !success
-            self.operationStatusMessage = success
-                ? self.language.text("历史已清空。", "History cleared.")
-                : self.language.text("清空失败，请查看运行日志。", "Clear failed. Check the runtime log.")
-        }
-    }
-
-    func isDeleting(_ session: TutorSession) -> Bool {
-        deletingSessionIDs.contains(session.id)
-    }
-}

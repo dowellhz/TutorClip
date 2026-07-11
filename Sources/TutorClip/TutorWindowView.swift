@@ -3,6 +3,8 @@ import SwiftUI
 struct TutorWindowView: View {
     @ObservedObject var viewModel: TutorViewModel
     @State private var sourceTextEditing = false
+    @State private var needsReviewDockExpanded = false
+    @State private var needsReviewDockHeight: CGFloat = 0
     private let chatBottomID = "chat-bottom"
     private let panelCornerRadius: CGFloat = 16
 
@@ -13,9 +15,11 @@ struct TutorWindowView: View {
             HStack(spacing: 0) {
                 TutorSourcePanel(viewModel: viewModel, sourceTextEditing: $sourceTextEditing)
                     .frame(minWidth: 480)
+                    .clipped()
                 verticalDivider
                 chatPanel
                     .frame(minWidth: 380)
+                    .clipped()
             }
         }
         .background(panelBackground)
@@ -28,10 +32,7 @@ struct TutorWindowView: View {
     }
 
     private var panelBackground: some View {
-        ZStack {
-            Color(nsColor: .windowBackgroundColor).opacity(0.96)
-            Color.white.opacity(0.035)
-        }
+        Color(nsColor: .windowBackgroundColor)
     }
 
     private var verticalDivider: some View {
@@ -51,6 +52,10 @@ struct TutorWindowView: View {
             Text("TutorClip")
                 .font(.system(size: 15, weight: .semibold))
             Spacer()
+            Button(viewModel.text("知识地图", "Knowledge Map")) {
+                viewModel.showKnowledgeMap()
+            }
+            .buttonStyle(ChromeButtonStyle())
             Button(viewModel.text("设置", "Settings")) {
                 viewModel.showSettings()
             }
@@ -105,6 +110,8 @@ struct TutorWindowView: View {
                 AnswerSummaryCard(summary: summary, language: viewModel.language)
                     .padding(.horizontal, 16)
                     .padding(.top, 10)
+            }
+            if !viewModel.session.ocrDocument.editedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 StudyStatusControl(viewModel: viewModel)
                     .padding(.horizontal, 16)
                     .padding(.top, 4)
@@ -113,29 +120,57 @@ struct TutorWindowView: View {
             }
 
             ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 12) {
-                        if viewModel.session.messages.isEmpty {
-                            emptyChat
+                ZStack(alignment: .bottomTrailing) {
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 12) {
+                            if currentMessages.isEmpty {
+                                emptyChat
+                            }
+                            if !viewModel.session.vocabularyCards.isEmpty {
+                                VocabularyCardsPanel(cards: viewModel.session.vocabularyCards, language: viewModel.language)
+                            }
+                            ForEach(learningTimeline) { entry in
+                                timelineView(entry)
+                            }
+                            Color.clear
+                                .frame(height: needsReviewDockExpanded ? needsReviewDockHeight + 28 : 54)
+                                .id(chatBottomID)
                         }
-                        if !viewModel.session.vocabularyCards.isEmpty {
-                            VocabularyCardsPanel(cards: viewModel.session.vocabularyCards, language: viewModel.language)
-                        }
-                        ForEach(viewModel.session.messages) { message in
-                            MessageBubble(message: message, language: viewModel.language)
-                        }
-                        Color.clear
-                            .frame(height: 1)
-                            .id(chatBottomID)
+                        .padding(16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .padding(16)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    if viewModel.session.studyStatus == .needsReview {
+                        needsReviewDock
+                            .padding(14)
+                            .background(
+                                GeometryReader { geometry in
+                                    Color.clear.preference(key: LearningDockHeightKey.self, value: geometry.size.height)
+                                }
+                            )
+                    }
                 }
+                .onPreferenceChange(LearningDockHeightKey.self) { needsReviewDockHeight = $0 }
                 .onChange(of: chatScrollSignal) {
                     scrollChatToBottom(proxy)
                 }
                 .onAppear {
                     scrollChatToBottom(proxy, animated: false)
+                }
+                .onChange(of: viewModel.session.learningMetadata.needsReviewFlow.stage) {
+                    withAnimation(.easeOut(duration: 0.18)) {
+                        needsReviewDockExpanded = true
+                    }
+                }
+                .onChange(of: viewModel.session.studyStatus) {
+                    if viewModel.session.studyStatus == .needsReview {
+                        needsReviewDockExpanded = true
+                    }
+                }
+                .onChange(of: viewModel.isStreaming) {
+                    guard viewModel.isStreaming, shouldMinimizeLearningDockWhileStreaming else { return }
+                    withAnimation(.easeOut(duration: 0.18)) {
+                        needsReviewDockExpanded = false
+                    }
                 }
             }
 
@@ -176,6 +211,91 @@ struct TutorWindowView: View {
         }
     }
 
+    @ViewBuilder
+    private var needsReviewDock: some View {
+        if needsReviewDockExpanded {
+            VStack(alignment: .trailing, spacing: 6) {
+                Button {
+                    withAnimation(.easeOut(duration: 0.18)) {
+                        needsReviewDockExpanded = false
+                    }
+                } label: {
+                    Label(viewModel.text("收起学习操作台", "Collapse Learning Dock"), systemImage: "chevron.down")
+                }
+                .buttonStyle(ChromeButtonStyle())
+                ScrollView {
+                    NeedsReviewGuidanceView(viewModel: viewModel)
+                }
+                .frame(maxHeight: 360)
+            }
+            .frame(maxWidth: 560)
+            .padding(8)
+            .background(Color(nsColor: .windowBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color.primary.opacity(0.10), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.16), radius: 10, y: 4)
+        } else {
+            Button {
+                withAnimation(.easeOut(duration: 0.18)) {
+                    needsReviewDockExpanded = true
+                }
+            } label: {
+                if viewModel.isStreaming && shouldMinimizeLearningDockWhileStreaming {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(width: 18, height: 18)
+                } else {
+                    Label(needsReviewFloatingTitle, systemImage: "graduationcap.fill")
+                }
+            }
+            .buttonStyle(PrimaryCapsuleButtonStyle())
+            .shadow(color: .black.opacity(0.14), radius: 8, y: 3)
+            .help(viewModel.isStreaming
+                  ? viewModel.text("基础讲解生成中", "Generating Foundation Explanation")
+                  : viewModel.text("展开学习操作台", "Expand Learning Dock"))
+        }
+    }
+
+    private var shouldMinimizeLearningDockWhileStreaming: Bool {
+        guard viewModel.session.learningMetadata.needsReviewFlow.stage == .foundation else { return false }
+        switch viewModel.learningLoadingAction {
+        case .foundation, .alternativeExplanation, .prerequisiteExplanation:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private var needsReviewFloatingTitle: String {
+        switch viewModel.session.learningMetadata.needsReviewFlow.stage {
+        case .chooseGap:
+            return viewModel.text("选择卡点", "Choose Learning Gap")
+        case .chooseEnglishBarrier:
+            return viewModel.text("选择英文障碍 1/4", "Choose English Barrier 1/4")
+        case .planReady:
+            return viewModel.text("开始不会题学习", "Start Review Learning")
+        case .foundation:
+            return viewModel.text("基础讲解 1/3", "Foundation 1/3")
+        case .microCheck:
+            return viewModel.text("微型检查 2/3", "Quick Check 2/3")
+        case .easyPractice:
+            return viewModel.text("简单同类题 3/3", "Easy Practice 3/3")
+        case .returnToOriginal:
+            return viewModel.text("回到原题 4/4", "Return to Original 4/4")
+        case .originalQuestion:
+            return viewModel.text("重新尝试原题", "Retry Original Question")
+        case .pendingVerification:
+            return viewModel.text("挑战原难度", "Try Original Difficulty")
+        case .scheduled:
+            return viewModel.text("查看复习计划", "View Review Plan")
+        case .inactive:
+            return viewModel.text("继续不会题学习", "Continue Review Learning")
+        }
+    }
+
     private var emptyChat: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(viewModel.text("选择左侧操作，或直接提问。", "Choose an action on the left, or ask directly."))
@@ -189,16 +309,53 @@ struct TutorWindowView: View {
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
+    private var learningTimeline: [LearningTimelineEntry] {
+        let messages = sessionMessages.map { LearningTimelineEntry(message: $0) }
+        let checks = viewModel.session.learningMetadata.needsReviewFlow.completedMicroChecks.map {
+            LearningTimelineEntry(check: $0)
+        }
+        return (messages + checks).sorted { $0.date < $1.date }
+    }
+
+    @ViewBuilder
+    private func timelineView(_ entry: LearningTimelineEntry) -> some View {
+        switch entry.content {
+        case .message(let message):
+            MessageBubble(message: message, language: viewModel.language)
+                .opacity(isArchived(message) ? 0.82 : 1)
+                .transaction { transaction in
+                    if viewModel.isStreaming { transaction.animation = nil }
+                }
+        case .check(let attempt):
+            CompletedMicroCheckView(attempt: attempt, language: viewModel.language)
+        }
+    }
+
+    private func isArchived(_ message: ChatMessage) -> Bool {
+        guard let context = message.contextDocumentID else { return false }
+        return context != viewModel.session.ocrDocument.id
+    }
+
+    private var currentMessages: [ChatMessage] {
+        sessionMessages.filter { message in
+            message.contextDocumentID == nil || message.contextDocumentID == viewModel.session.ocrDocument.id
+        }
+    }
+
+    private var sessionMessages: [ChatMessage] {
+        viewModel.session.messages
+    }
+
     private var chatScrollSignal: String {
         guard let last = viewModel.session.messages.last else {
             return "empty"
         }
-        return "\(viewModel.session.messages.count)-\(last.id.uuidString)-\(last.content.count)"
+        return "\(viewModel.session.messages.count)-\(last.id.uuidString)-\(viewModel.isStreaming)"
     }
 
     private func scrollChatToBottom(_ proxy: ScrollViewProxy, animated: Bool = true) {
         DispatchQueue.main.async {
-            if animated {
+            if animated && !viewModel.isStreaming {
                 withAnimation(.easeOut(duration: 0.16)) {
                     proxy.scrollTo(chatBottomID, anchor: .bottom)
                 }
@@ -206,5 +363,35 @@ struct TutorWindowView: View {
                 proxy.scrollTo(chatBottomID, anchor: .bottom)
             }
         }
+    }
+}
+
+private struct LearningDockHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+private struct LearningTimelineEntry: Identifiable {
+    enum Content {
+        case message(ChatMessage)
+        case check(SATMicroCheckAttempt)
+    }
+
+    let id: String
+    let date: Date
+    let content: Content
+
+    init(message: ChatMessage) {
+        id = "message-\(message.id.uuidString)"
+        date = message.createdAt
+        content = .message(message)
+    }
+
+    init(check: SATMicroCheckAttempt) {
+        id = "check-\(check.id.uuidString)"
+        date = check.completedAt
+        content = .check(check)
     }
 }

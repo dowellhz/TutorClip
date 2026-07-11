@@ -232,7 +232,7 @@ enum DiagnosticUIProbe {
 
     @MainActor
     private static func answerProbeSession() -> TutorSession {
-        TutorSession(
+        let session = TutorSession(
             id: UUID(),
             title: "Answer Probe",
             createdAt: Date(),
@@ -252,5 +252,7 @@ enum DiagnosticUIProbe {
             category: .reading,
             correctAnswer: "B"
         )
+        session.learningMetadata.correctAnswerUserConfirmed = true
+        return session
     }
 }

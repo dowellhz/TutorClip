@@ -57,6 +57,10 @@ final class TutorWindowController: NSWindowController {
         viewModel.formatOCR()
     }
 
+    func generatePracticeQuestion() {
+        viewModel.generatePracticeQuestion()
+    }
+
     private func positionWindow(near selectionRect: CGRect) {
         guard let window else { return }
         let screen = screen(containing: selectionRect) ?? NSScreen.main
@@ -296,6 +300,33 @@ final class HistoryWindowController: NSWindowController {
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
+
+    func show() {
+        window?.center()
+        window?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+}
+
+@MainActor
+final class KnowledgeMapWindowController: NSWindowController {
+    init(viewModel: HistoryViewModel) {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 900, height: 620),
+            styleMask: [.titled, .closable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "TutorClip Knowledge Map"
+        window.level = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue + 1)
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        window.hidesOnDeactivate = false
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: KnowledgeMapView(viewModel: viewModel))
+        super.init(window: window)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     func show() {
         window?.center()

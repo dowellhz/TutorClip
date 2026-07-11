@@ -4,6 +4,7 @@ struct GeneratedQuestion {
     var question: String
     var answer: String?
     var category: SessionCategory?
+    var learningMetadata: SATLearningMetadata
 
     static func parse(_ raw: String, requireQuestionBlock: Bool = false) -> GeneratedQuestion {
         let metadataParsed = QuestionMetadata.extract(from: stripCodeFences(raw))
@@ -22,7 +23,8 @@ struct GeneratedQuestion {
         return GeneratedQuestion(
             question: question,
             answer: metadataParsed.metadata.answer,
-            category: metadataParsed.metadata.category
+            category: metadataParsed.metadata.category,
+            learningMetadata: SATLearningMetadata(questionMetadata: metadataParsed.metadata, isAIGenerated: true)
         )
     }
 

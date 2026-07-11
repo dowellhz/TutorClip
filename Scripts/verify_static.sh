@@ -64,9 +64,11 @@ if [ -e Sources/TutorClip/OCRInitialTextFormatter.swift ]; then
   echo "Local OCR formatter must not be reintroduced; use DeepSeek formatting plus Markdown rendering."
   failed=1
 fi
-if ! rg -n "withTaskCancellationHandler" Sources/TutorClip/OCRService.swift >/dev/null 2>&1 \
-  || ! rg -n "activeRequest\?\.cancel\(\)" Sources/TutorClip/OCRService.swift >/dev/null 2>&1; then
-  echo "Vision OCR must cancel its active request when the owning session task is cancelled."
+if ! rg -n "RecognizeDocumentsRequest" Sources/TutorClip/OCRService.swift >/dev/null 2>&1 \
+  || ! rg -n "catch is CancellationError" Sources/TutorClip/OCRService.swift >/dev/null 2>&1 \
+  || ! rg -n "task\?\.cancel\(\)" Sources/TutorClip/OCRRequestLifecycle.swift >/dev/null 2>&1 \
+  || ! rg -n "!Task\.isCancelled" Sources/TutorClip/OCRRequestLifecycle.swift >/dev/null 2>&1; then
+  echo "Modern Vision OCR must be owned by a cancellable task and reject cancelled results."
   failed=1
 fi
 if ! rg -n "NSMutableAttributedString\\(" Sources/TutorClip/SelectableMarkdownTextView.swift >/dev/null 2>&1; then
