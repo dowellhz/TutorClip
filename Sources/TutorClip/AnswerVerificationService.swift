@@ -37,7 +37,7 @@ struct AnswerVerificationService {
     let client: any DeepSeekStreaming
     let promptBuilder: PromptBuilder
 
-    private static let automaticAcceptanceConfidence = 0.85
+    private static let automaticAcceptanceConfidence = 0.90
     private static let minimumVerifiedConfidence = 0.8
 
     func verify(question: String) async throws -> AnswerVerification? {

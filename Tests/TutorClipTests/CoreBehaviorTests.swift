@@ -344,7 +344,7 @@ final class CoreBehaviorTests: XCTestCase {
     @MainActor
     func testAnswerVerificationEscalatesOnlyLowConfidenceAnswers() async throws {
         let streamer = ThinkingRecordingDeepSeekStreamer(responses: [
-            "ANSWER_VERIFICATION\nAnswer: C\nConfidence: 0.82\nEvidence: The passage supports C, but the wording is ambiguous.\nEND_ANSWER_VERIFICATION",
+            "ANSWER_VERIFICATION\nAnswer: C\nConfidence: 0.85\nEvidence: The passage supports C, but the wording is ambiguous.\nEND_ANSWER_VERIFICATION",
             "ANSWER_VERIFICATION\nAnswer: A\nConfidence: 0.93\nEvidence: The chronology directly supports A.\nEND_ANSWER_VERIFICATION"
         ])
         let result = try await AnswerVerificationService(client: streamer, promptBuilder: PromptBuilder())
