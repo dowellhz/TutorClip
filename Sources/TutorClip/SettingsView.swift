@@ -125,15 +125,6 @@ struct SettingsView: View {
                 TextField("https://api.deepseek.com", text: $viewModel.settings.deepseekBaseURL)
                     .textFieldStyle(.plain)
             }
-            labeledField(language.text("模型", "Model")) {
-                Picker("", selection: deepSeekModelSelection) {
-                    ForEach(DeepSeekModel.allCases) { model in
-                        Text(model.title(language: language)).tag(model)
-                    }
-                }
-                .labelsHidden()
-                .pickerStyle(.segmented)
-            }
             HStack(spacing: 10) {
                 Text("Temperature")
                     .font(.system(size: 13, weight: .medium))
@@ -146,13 +137,6 @@ struct SettingsView: View {
                     .frame(width: 40)
             }
         }
-    }
-
-    private var deepSeekModelSelection: Binding<DeepSeekModel> {
-        Binding(
-            get: { DeepSeekModel(modelID: viewModel.settings.deepseekModel) },
-            set: { viewModel.settings.deepseekModel = $0.rawValue }
-        )
     }
 
     private var generalSection: some View {

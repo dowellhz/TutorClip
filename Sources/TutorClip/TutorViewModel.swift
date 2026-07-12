@@ -37,6 +37,7 @@ final class TutorViewModel: ObservableObject {
     private var sessionCancellable: AnyCancellable?
     var inFlightTask: Task<Void, Never>?
     var activeRequestID: UUID?
+    var answerVerificationTask: Task<AnswerVerification?, Never>?
 
     init(session: TutorSession, isLoadingOCR: Bool, settingsStore: SettingsStore, historyStore: HistoryStore, masteryEvidenceStore: MasteryEvidenceStore? = nil, deepSeekClient: any DeepSeekStreaming, promptBuilder: PromptBuilder, onRecapture: @escaping () -> Void, onSettings: @escaping () -> Void, onKnowledgeMap: @escaping () -> Void = {}, onNextQuestion: @escaping () -> Void = {}, onClose: @escaping () -> Void) {
         self.session = session

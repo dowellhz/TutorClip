@@ -62,7 +62,11 @@ struct AnswerVerificationService {
     private func request(_ messages: [DeepSeekMessage]) async throws -> AnswerVerification? {
         var response = ""
         do {
-            try await client.stream(messages: messages, temperatureOverride: 0) { response += $0 }
+            try await client.stream(
+                messages: messages,
+                temperatureOverride: 0,
+                modelOverride: DeepSeekModel.pro.rawValue
+            ) { response += $0 }
             try Task.checkCancellation()
             return AnswerVerification.parse(response)
         } catch is CancellationError {

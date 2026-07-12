@@ -14,6 +14,8 @@ extension TutorViewModel {
         }
         RuntimeLog.write("format-ocr-start chars=\(original.count)")
         RuntimeLog.writeTextBlock("format-ocr-original", original)
+        let sessionID = session.id
+        let preflightVerification = beginAnswerVerification(for: original)
         errorMessage = nil
         ocrFormatState = .formatting
         let requestID = beginRequest()
@@ -24,7 +26,11 @@ extension TutorViewModel {
             guard let self else { return }
             defer { self.finishRequest(requestID) }
             do {
-                try await deepSeekClient.stream(messages: messages) { token in
+                try await deepSeekClient.stream(
+                    messages: messages,
+                    temperatureOverride: nil,
+                    modelOverride: DeepSeekModel.flash.rawValue
+                ) { token in
                     guard self.isCurrentRequest(requestID) else { return }
                     formatted += token
                 }
@@ -57,14 +63,9 @@ extension TutorViewModel {
                     RuntimeLog.write("format-ocr-rejected empty-result")
                     return
                 }
-                let verification = try await AnswerVerificationService(client: deepSeekClient, promptBuilder: promptBuilder)
-                    .verify(question: cleaned)
                 updateOCRText(cleaned)
-                session.correctAnswer = verification?.answer
                 session.learningMetadata = parsed.learningMetadata
                 session.learningMetadata.isAIGenerated = false
-                session.learningMetadata.isAIVerified = verification != nil
-                session.learningMetadata.answerConfidence = verification?.confidence
                 applyMetadataCategory(parsed.category)
                 session.selectedAnswer = nil
                 TutorSessionMutation.updateFullText(cleaned, in: session)
@@ -74,6 +75,12 @@ extension TutorViewModel {
                     try Task.checkCancellation()
                 }
                 ocrFormatState = .applied
+                applyPreflightVerification(
+                    preflightVerification,
+                    originalQuestion: original,
+                    formattedQuestion: cleaned,
+                    sessionID: sessionID
+                )
                 RuntimeLog.write("format-ocr-applied")
             } catch is CancellationError {
                 RuntimeLog.write("format-ocr-cancelled")
@@ -110,7 +117,11 @@ private struct GrammarBlankAuditor {
             """),
             DeepSeekMessage(role: "user", content: "原始 OCR：\n\(document.editedText)\n\n待审校候选：\n\(candidate)")
         ]
-        try await client.stream(messages: messages, temperatureOverride: 0) { response += $0 }
+        try await client.stream(
+            messages: messages,
+            temperatureOverride: 0,
+            modelOverride: DeepSeekModel.flash.rawValue
+        ) { response += $0 }
         try Task.checkCancellation()
         let repaired = GeneratedQuestion.parse(response, requireQuestionBlock: true).question
         let sourceChoices = Set(TutorQuestionParsing.answerChoices(from: candidate))

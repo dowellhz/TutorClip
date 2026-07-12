@@ -19,7 +19,8 @@ struct TableFormattingAuditor {
                 )
                 try await client.stream(
                     messages: messages,
-                    temperatureOverride: 0
+                    temperatureOverride: 0,
+                    modelOverride: DeepSeekModel.flash.rawValue
                 ) { token in
                     response += token
                 }

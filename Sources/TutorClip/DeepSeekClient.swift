@@ -4,11 +4,16 @@ import Foundation
 protocol DeepSeekStreaming {
     func stream(messages: [DeepSeekMessage], onToken: @escaping @MainActor (String) -> Void) async throws
     func stream(messages: [DeepSeekMessage], temperatureOverride: Double?, onToken: @escaping @MainActor (String) -> Void) async throws
+    func stream(messages: [DeepSeekMessage], temperatureOverride: Double?, modelOverride: String?, onToken: @escaping @MainActor (String) -> Void) async throws
 }
 
 extension DeepSeekStreaming {
     func stream(messages: [DeepSeekMessage], temperatureOverride: Double?, onToken: @escaping @MainActor (String) -> Void) async throws {
         try await stream(messages: messages, onToken: onToken)
+    }
+
+    func stream(messages: [DeepSeekMessage], temperatureOverride: Double?, modelOverride: String?, onToken: @escaping @MainActor (String) -> Void) async throws {
+        try await stream(messages: messages, temperatureOverride: temperatureOverride, onToken: onToken)
     }
 }
 
@@ -46,10 +51,14 @@ final class DeepSeekClient: DeepSeekStreaming {
     }
 
     func stream(messages: [DeepSeekMessage], onToken: @escaping @MainActor (String) -> Void) async throws {
-        try await stream(messages: messages, temperatureOverride: nil, onToken: onToken)
+        try await stream(messages: messages, temperatureOverride: nil, modelOverride: nil, onToken: onToken)
     }
 
     func stream(messages: [DeepSeekMessage], temperatureOverride: Double?, onToken: @escaping @MainActor (String) -> Void) async throws {
+        try await stream(messages: messages, temperatureOverride: temperatureOverride, modelOverride: nil, onToken: onToken)
+    }
+
+    func stream(messages: [DeepSeekMessage], temperatureOverride: Double?, modelOverride: String?, onToken: @escaping @MainActor (String) -> Void) async throws {
         let config = configLoader.currentConfig(settings: settingsStore.settings)
         let language = settingsStore.settings.appLanguage
         guard let apiKey = config.apiKey, !apiKey.isEmpty else {
@@ -66,7 +75,7 @@ final class DeepSeekClient: DeepSeekStreaming {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         let body = DeepSeekRequest(
-            model: config.model,
+            model: modelOverride ?? config.model,
             messages: messages,
             temperature: temperatureOverride ?? settingsStore.settings.temperature,
             stream: true
