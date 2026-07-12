@@ -45,7 +45,7 @@ extension PromptBuilder {
         Confidence: 0 到 1
         Evidence: 一行具体证据；表格题必须包含关键数值比较
         END_ANSWER_VERIFICATION
-        若题目不完整或无法可靠作答，Confidence 必须低于 0.8。
+        Confidence 必须校准而非乐观猜测：0.90 以上仅用于有直接、完整且可复核证据的答案；0.80 到 0.89 表示存在合理但未完全排除的歧义；低于 0.80 表示题目不完整或无法可靠作答。不得为了让系统接受答案而虚报置信度。
         """
     }
 }

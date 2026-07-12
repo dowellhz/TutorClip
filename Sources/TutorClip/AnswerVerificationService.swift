@@ -37,39 +37,39 @@ struct AnswerVerificationService {
     let client: any DeepSeekStreaming
     let promptBuilder: PromptBuilder
 
-    func verify(question: String, requiresCrossCheck: Bool = false) async throws -> AnswerVerification? {
+    private static let automaticAcceptanceConfidence = 0.85
+    private static let minimumVerifiedConfidence = 0.8
+
+    func verify(question: String) async throws -> AnswerVerification? {
         guard TutorQuestionParsing.answerChoices(from: question).count >= 2 else { return nil }
-        let solver = try await request(promptBuilder.answerSolverPrompt(question: question))
-        guard let solver, solver.confidence >= 0.8 else {
+        let solver = try await request(promptBuilder.answerSolverPrompt(question: question), thinkingMode: .disabled)
+        guard let solver else {
             RuntimeLog.write("answer-verification-unverified stage=solver")
             return nil
         }
-        guard requiresCrossCheck else {
-            RuntimeLog.write("answer-verification-passed answer=\(solver.answer) mode=single")
+        guard solver.confidence < Self.automaticAcceptanceConfidence else {
+            RuntimeLog.write("answer-verification-passed answer=\(solver.answer) mode=standard confidence=\(solver.confidence)")
             return solver
         }
-        let critic = try await request(promptBuilder.answerCriticPrompt(question: question, proposal: solver))
-        guard let critic,
-              critic.confidence >= 0.8,
-              critic.answer == solver.answer else {
-            RuntimeLog.write("answer-verification-conflict solver=\(solver.answer) critic=\(critic?.answer ?? "nil")")
+
+        RuntimeLog.write("answer-verification-escalated confidence=\(solver.confidence)")
+        let reasoningResult = try await request(promptBuilder.answerSolverPrompt(question: question), thinkingMode: .high)
+        guard let reasoningResult, reasoningResult.confidence >= Self.minimumVerifiedConfidence else {
+            RuntimeLog.write("answer-verification-unverified stage=reasoning")
             return nil
         }
-        RuntimeLog.write("answer-verification-passed answer=\(critic.answer)")
-        return AnswerVerification(
-            answer: critic.answer,
-            confidence: min(solver.confidence, critic.confidence),
-            evidence: critic.evidence
-        )
+        RuntimeLog.write("answer-verification-passed answer=\(reasoningResult.answer) mode=reasoning confidence=\(reasoningResult.confidence)")
+        return reasoningResult
     }
 
-    private func request(_ messages: [DeepSeekMessage]) async throws -> AnswerVerification? {
+    private func request(_ messages: [DeepSeekMessage], thinkingMode: DeepSeekThinkingMode) async throws -> AnswerVerification? {
         var response = ""
         do {
             try await client.stream(
                 messages: messages,
                 temperatureOverride: 0,
-                modelOverride: DeepSeekModel.pro.rawValue
+                modelOverride: DeepSeekModel.pro.rawValue,
+                thinkingMode: thinkingMode
             ) { response += $0 }
             try Task.checkCancellation()
             return AnswerVerification.parse(response)

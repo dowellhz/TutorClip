@@ -342,22 +342,15 @@ final class CoreBehaviorTests: XCTestCase {
     }
 
     @MainActor
-    func testAnswerVerificationRequiresIndependentAgreement() async throws {
-        let agreeing = SequenceDeepSeekStreamer(responses: [
-            "ANSWER_VERIFICATION\nAnswer: A\nConfidence: 0.94\nEvidence: 1900 values are similar and 1950 values diverge.\nEND_ANSWER_VERIFICATION",
-            "ANSWER_VERIFICATION\nAnswer: A\nConfidence: 0.91\nEvidence: France and US separate most between 1900 and 1950.\nEND_ANSWER_VERIFICATION"
+    func testAnswerVerificationEscalatesOnlyLowConfidenceAnswers() async throws {
+        let streamer = ThinkingRecordingDeepSeekStreamer(responses: [
+            "ANSWER_VERIFICATION\nAnswer: C\nConfidence: 0.82\nEvidence: The passage supports C, but the wording is ambiguous.\nEND_ANSWER_VERIFICATION",
+            "ANSWER_VERIFICATION\nAnswer: A\nConfidence: 0.93\nEvidence: The chronology directly supports A.\nEND_ANSWER_VERIFICATION"
         ])
-        let accepted = try await AnswerVerificationService(client: agreeing, promptBuilder: PromptBuilder())
-            .verify(question: "Question?\n\nA) One\n\nB) Two", requiresCrossCheck: true)
-        XCTAssertEqual(accepted?.answer, "A")
-
-        let conflicting = SequenceDeepSeekStreamer(responses: [
-            "ANSWER_VERIFICATION\nAnswer: A\nConfidence: 0.94\nEvidence: Evidence A.\nEND_ANSWER_VERIFICATION",
-            "ANSWER_VERIFICATION\nAnswer: B\nConfidence: 0.93\nEvidence: Evidence B.\nEND_ANSWER_VERIFICATION"
-        ])
-        let rejected = try await AnswerVerificationService(client: conflicting, promptBuilder: PromptBuilder())
-            .verify(question: "Question?\n\nA) One\n\nB) Two", requiresCrossCheck: true)
-        XCTAssertNil(rejected)
+        let result = try await AnswerVerificationService(client: streamer, promptBuilder: PromptBuilder())
+            .verify(question: "Question?\n\nA) One\n\nB) Two")
+        XCTAssertEqual(result?.answer, "A")
+        XCTAssertEqual(streamer.thinkingModes, [.disabled, .high])
     }
 
     @MainActor
@@ -442,6 +435,27 @@ private final class SequenceDeepSeekStreamer: DeepSeekStreaming {
     }
 
     func stream(messages: [DeepSeekMessage], onToken: @escaping @MainActor (String) -> Void) async throws {
+        guard !responses.isEmpty else { return }
+        onToken(responses.removeFirst())
+    }
+}
+
+@MainActor
+private final class ThinkingRecordingDeepSeekStreamer: DeepSeekStreaming {
+    private var responses: [String]
+    private(set) var thinkingModes: [DeepSeekThinkingMode] = []
+
+    init(responses: [String]) {
+        self.responses = responses
+    }
+
+    func stream(messages: [DeepSeekMessage], onToken: @escaping @MainActor (String) -> Void) async throws {
+        guard !responses.isEmpty else { return }
+        onToken(responses.removeFirst())
+    }
+
+    func stream(messages: [DeepSeekMessage], temperatureOverride: Double?, modelOverride: String?, thinkingMode: DeepSeekThinkingMode, onToken: @escaping @MainActor (String) -> Void) async throws {
+        thinkingModes.append(thinkingMode)
         guard !responses.isEmpty else { return }
         onToken(responses.removeFirst())
     }
