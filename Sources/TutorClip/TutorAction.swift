@@ -15,6 +15,12 @@ enum TutorAction: String, Codable, CaseIterable {
     static let sourceLeadingActions: [TutorAction] = [.vocabulary, .grammar]
     static let sourceTrailingActions: [TutorAction] = [.practiceSimilar, .translateAll, .explainAll]
 
+    static func sourceTrailingActions(language: AppLanguage) -> [TutorAction] {
+        language == .english
+            ? [.practiceSimilar, .explainAll]
+            : sourceTrailingActions
+    }
+
     var title: String {
         title(language: .chinese)
     }
@@ -27,7 +33,7 @@ enum TutorAction: String, Codable, CaseIterable {
         case .checkOCR: return language.text("检查 OCR", "Check OCR")
         case .translateSelection: return language.text("翻译", "Translate")
         case .explainSelection: return language.text("讲题", "Explain")
-        case .vocabulary: return language.text("词汇", "Vocabulary")
+        case .vocabulary: return language.text("词汇", "Vocab")
         case .grammar: return language.text("解析文章", "Analyze")
         case .practiceSimilar: return language.text("再练一题", "Practice")
         case .customQuestion: return language.text("提问", "Ask")

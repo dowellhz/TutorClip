@@ -12,6 +12,20 @@ TutorClip is a macOS 26+ personal SAT screenshot tutor.
 | --- |
 | ![TutorClip vocabulary review](docs/screenshots/vocabulary-review.png) |
 
+## 使用方法
+
+TutorClip 目前面向 Digital SAT Reading and Writing；不提供 SAT Math 的解题或练习。
+
+1. 从 [Releases](https://github.com/dowellhz/TutorClip/releases) 下载并安装 `TutorClip.dmg`，把应用安装到 `Applications` 后启动。
+2. 首次启动时，在“帮助与设置”中完成学习进度与历史记录选项，并输入 DeepSeek API Key。API Key 也可通过环境变量 `DEEPSEEK_API_KEY` 提供。
+3. 正常启动会打开“今日学习”。直接完成系统安排的练习题，选择答案后可查看即时讲解、标记“会了 / 不会 / 错题”，并继续下一题。
+4. 截图识题时按 `Shift + Command + O`，拖拽框选题目区域，再双击或按 Return 确认。首次使用需要授予 Screen Recording 权限。
+5. OCR 完成后，在“题目”标签阅读和编辑文字；需要核对原图时切换到“截图”标签。复杂的文本下划线会在题目中恢复，填空位置则保留为 `_____`。
+6. 使用底部操作快速进行“讲解整题”“翻译全文”“解析文章”“再练一题”或词汇提取；选中文字后只会显示翻译和生词操作。
+7. 在“知识地图”查看 Reading and Writing 知识点掌握度；在“生词”完成当天复习；“历史”可查看已保存的题目和对话记录。
+
+截图只在当前 OCR 会话内存中使用；关闭或替换该会话后会被丢弃。
+
 ## Build
 
 ```sh

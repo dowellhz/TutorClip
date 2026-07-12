@@ -99,22 +99,24 @@ struct TutorSourcePanel: View {
     }
 
     private var actionBar: some View {
-        HStack(spacing: 8) {
-            Button(viewModel.text("重截", "Recapture")) { viewModel.recapture() }
-                .buttonStyle(ChromeButtonStyle())
-            ForEach(TutorAction.sourceLeadingActions, id: \.self) { action in
-                Button(action.title(language: viewModel.language)) { viewModel.run(action: action) }
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                Button(viewModel.text("重截", "Capture")) { viewModel.recapture() }
                     .buttonStyle(ChromeButtonStyle())
-                    .disabled(viewModel.isViewingQuestionSnapshot)
+                ForEach(TutorAction.sourceLeadingActions, id: \.self) { action in
+                    Button(action.title(language: viewModel.language)) { viewModel.run(action: action) }
+                        .buttonStyle(ChromeButtonStyle())
+                        .disabled(viewModel.isViewingQuestionSnapshot)
+                }
+                ForEach(TutorAction.sourceTrailingActions(language: viewModel.language), id: \.self) { action in
+                    actionButton(action)
+                        .disabled(viewModel.isViewingQuestionSnapshot)
+                }
             }
-            Spacer()
-            ForEach(TutorAction.sourceTrailingActions, id: \.self) { action in
-                actionButton(action)
-                    .disabled(viewModel.isViewingQuestionSnapshot)
-            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.primary.opacity(0.015))
     }
 
