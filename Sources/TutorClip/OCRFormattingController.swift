@@ -30,12 +30,12 @@ extension TutorViewModel {
                 try await deepSeekClient.stream(
                     messages: messages,
                     temperatureOverride: nil,
-                    modelOverride: DeepSeekModel.flash.rawValue
+                    modelOverride: DeepSeekModel.pro.rawValue
                 ) { token in
                     guard self.isCurrentRequest(requestID) else { return }
                     formatted += token
                 }
-                PipelineTimingMetrics.record(stage: "Flash OCR formatting", duration: Date().timeIntervalSince(formattingStartedAt))
+                PipelineTimingMetrics.record(stage: "Pro OCR formatting", duration: Date().timeIntervalSince(formattingStartedAt))
                 try Task.checkCancellation()
                 guard isCurrentRequest(requestID) else { return }
                 var parsed = GeneratedQuestion.parse(formatted, requireQuestionBlock: true)
@@ -119,7 +119,7 @@ private struct GrammarBlankAuditor {
         try await client.stream(
             messages: messages,
             temperatureOverride: 0,
-            modelOverride: DeepSeekModel.flash.rawValue
+            modelOverride: DeepSeekModel.pro.rawValue
         ) { response += $0 }
         try Task.checkCancellation()
         let repaired = GeneratedQuestion.parse(response, requireQuestionBlock: true).question

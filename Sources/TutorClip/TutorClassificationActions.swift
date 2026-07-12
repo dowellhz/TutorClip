@@ -9,7 +9,7 @@ extension TutorViewModel {
             try await deepSeekClient.stream(
                 messages: promptBuilder.classifyQuestionPrompt(text: text),
                 temperatureOverride: nil,
-                modelOverride: DeepSeekModel.flash.rawValue
+                modelOverride: DeepSeekModel.pro.rawValue
             ) { token in
                 raw += token
             }

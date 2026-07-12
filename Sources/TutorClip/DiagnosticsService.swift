@@ -180,7 +180,7 @@ enum PipelineTimingMetrics {
         return snapshot.keys.sorted().map { stage in
             let seconds = snapshot[stage] ?? 0
             return DiagnosticItem(
-                title: language == .chinese ? stage.replacingOccurrences(of: "Local Vision OCR", with: "本地 Vision OCR").replacingOccurrences(of: "Flash OCR formatting", with: "Flash OCR 排版").replacingOccurrences(of: "Pro answer verification", with: "Pro 答案校验") : stage,
+                title: language == .chinese ? stage.replacingOccurrences(of: "Local Vision OCR", with: "本地 Vision OCR").replacingOccurrences(of: "Pro OCR formatting", with: "Pro OCR 排版").replacingOccurrences(of: "Pro answer verification", with: "Pro 答案校验") : stage,
                 state: seconds > 20 ? .warn : .pass,
                 detail: language.text("最近一次：\(seconds.formatted(.number.precision(.fractionLength(1)))) 秒", "Latest: \(seconds.formatted(.number.precision(.fractionLength(1)))) s")
             )
