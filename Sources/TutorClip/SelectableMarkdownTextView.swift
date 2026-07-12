@@ -153,6 +153,56 @@ struct SelectableMarkdownTextView: NSViewRepresentable {
 }
 
 enum UnderlineTextMatcher {
+    static func range(of text: String, in source: NSString) -> NSRange? {
+        let exact = source.range(of: text, options: [.caseInsensitive, .diacriticInsensitive])
+        if exact.location != NSNotFound { return exact }
+
+        let sourceText = source as String
+        let targetCharacters = Array(text)
+        let sourceCharacters = Array(sourceText)
+        guard let firstTarget = targetCharacters.first(where: { !$0.isWhitespace }) else { return nil }
+
+        for start in sourceCharacters.indices where sourceCharacters[start].lowercased() == firstTarget.lowercased() {
+            var sourceIndex = start
+            var targetIndex = targetCharacters.startIndex
+            var lastSourceIndex = start
+            var matched = true
+
+            while targetIndex < targetCharacters.endIndex {
+                let target = targetCharacters[targetIndex]
+                if target.isWhitespace {
+                    guard sourceIndex < sourceCharacters.endIndex, sourceCharacters[sourceIndex].isWhitespace else {
+                        matched = false
+                        break
+                    }
+                    while targetIndex < targetCharacters.endIndex, targetCharacters[targetIndex].isWhitespace {
+                        targetIndex += 1
+                    }
+                    while sourceIndex < sourceCharacters.endIndex, sourceCharacters[sourceIndex].isWhitespace {
+                        lastSourceIndex = sourceIndex
+                        sourceIndex += 1
+                    }
+                    continue
+                }
+                guard sourceIndex < sourceCharacters.endIndex,
+                      sourceCharacters[sourceIndex].lowercased() == target.lowercased() else {
+                    matched = false
+                    break
+                }
+                lastSourceIndex = sourceIndex
+                sourceIndex += 1
+                targetIndex += 1
+            }
+
+            if matched {
+                let startIndex = sourceText.index(sourceText.startIndex, offsetBy: start)
+                let endIndex = sourceText.index(sourceText.startIndex, offsetBy: lastSourceIndex + 1)
+                return NSRange(startIndex..<endIndex, in: sourceText)
+            }
+        }
+        return nil
+    }
+
     static func uniqueRange(of text: String, in source: NSString) -> NSRange? {
         let options: NSString.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
         let whole = NSRange(location: 0, length: source.length)

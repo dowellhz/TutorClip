@@ -9,9 +9,8 @@ extension TutorViewModel {
     var isViewingQuestionSnapshot: Bool { viewedQuestionSnapshot != nil }
 
     var underlinedOCRTexts: [String] {
-        OCRVisualCuePolicy.acceptedUnderlinedTokens(in: session.ocrDocument)
-            .map(\.text)
-            .filter { OCRVisualCuePolicy.occursUniquely($0, in: session.ocrDocument.editedText) }
+        OCRVisualCuePolicy.underlinedTextSpans(in: session.ocrDocument)
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }
 
     func viewQuestionSnapshot(_ snapshot: SATQuestionSnapshot?) {

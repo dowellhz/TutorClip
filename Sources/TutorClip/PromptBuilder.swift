@@ -89,9 +89,9 @@ struct PromptBuilder {
             if !selected.isEmpty {
                 parts.append("\(language.text("用户选中文本", "Selected text"))：\n\(selected)")
             }
-            let underlined = document.tokens.filter { $0.isLikelyUnderlined == true }.map(\.text)
+            let underlined = OCRVisualCuePolicy.underlinedTextSpans(in: document)
             if !underlined.isEmpty {
-                parts.append("\(language.text("本地下划线检测（可能有误，请结合截图语义谨慎处理）", "Locally detected underlined text (may be imperfect; treat cautiously)"))：\n\(underlined.joined(separator: ", "))")
+                parts.append("\(language.text("本地下划线检测（可能有误，请结合截图语义谨慎处理）", "Locally detected underlined text (may be imperfect; treat cautiously)"))：\n\(underlined.joined(separator: "\n"))")
             }
         }
         parts.append("\(language.text("任务", "Task"))：\(instruction(for: action, hasSelection: !selected.isEmpty, category: category, language: language))")
@@ -106,6 +106,10 @@ struct PromptBuilder {
 
     func formatOCRPrompt(document: OCRDocument) -> [DeepSeekMessage] {
         let structure = formattingStructureSummary(for: document, includeTokenLayout: true)
+        let underlineSpans = OCRVisualCuePolicy.underlinedTextSpans(in: document)
+        let underlineContext = underlineSpans.isEmpty
+            ? "(无)"
+            : underlineSpans.map { "<u>\($0)</u>" }.joined(separator: "\n")
         return [
             DeepSeekMessage(
                 role: "system",
@@ -114,7 +118,7 @@ struct PromptBuilder {
                 通常只允许调整空格、换行、空白行、段落和选项排列。当 OCR 结构摘要包含 STRUCTURED_TABLE_n 时有两个明确例外：(1) 必须用标准 GFM Markdown 表格恢复这些单元格，可以增加表格语法所需的 |、- 和对齐符号；(2) OCR 可能把同一个表格标题的已有残片错排到表格前后，必须移动这些已有残片、按语义顺序合并，并把完整标题放到表格正上方。除此之外不得增加、删除、改写、移动或猜测任何内容。
                 对题目正文严禁增加、删除、替换、翻译或改写任何非空白字符。不要解释，不要添加标题，不要新增项目符号。
                 如果 OCR 原文已经包含项目符号，例如 "•"，必须原样保留这些符号，并把每条笔记拆成独立 Markdown 段落。
-                题目正文不要使用粗体、斜体、分隔线或任何装饰性 Markdown 标记。
+                题目正文不要使用粗体、斜体、分隔线或任何装饰性 Markdown 标记。唯一例外是用户消息中 VISUAL_UNDERLINE_SPANS 提供的原文范围：必须完整保留，并用 <u> 和 </u> 包裹。
                 输出必须严格包含两个块，不要使用代码块包裹，不要输出说明文字：
                 FORMATTED_QUESTION
                 整理后的 Markdown 题目正文
@@ -160,6 +164,7 @@ struct PromptBuilder {
                 - 用 Markdown 段落排版：文章段落、题干、每个选项之间用一个空白行隔开。
                 - 如果原文包含 "notes:" 后接多个 "•" 项目符号，每个 "•" 必须单独成行或单独成段；不要把多个 "•" 项目压在同一段。
                 - 不要新增项目符号；但原文已有的 "•"、"-"、A/B/C/D 标记必须保留。
+                - VISUAL_UNDERLINE_SPANS 是本地视觉检测到的文本下划线范围。每个范围必须在正文中原样保留，并精确用 <u> 和 </u> 包裹；不要把填空作答线 `_____` 当作文本下划线。
                 - 如果出现题号，例如 "26."，题号所在问题必须和上方文章用空白行分开。
                 - 如果出现 A/B/C/D 选项标记，每个选项标记前必须有空白行。
                 - 选项标记必须保持 OCR 原样：原文是 "A" 就输出 "A"，原文是 "A." 才输出 "A."，绝对不要补点号或删除点号。
@@ -192,6 +197,9 @@ struct PromptBuilder {
 
                 OCR 文本：
                 \(document.editedText.isEmpty ? "(OCR 为空)" : document.editedText)
+
+                VISUAL_UNDERLINE_SPANS：
+                \(underlineContext)
 
                 OCR 结构摘要（仅用于恢复版面，不得原样输出协议标记）：
                 \(structure.isEmpty ? "(无结构摘要)" : structure)

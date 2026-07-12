@@ -31,6 +31,29 @@ final class QuestionRenderingBehaviorTests: XCTestCase {
         OCRTableCell(id: UUID(), text: text, rowStart: row, rowEnd: row, columnStart: column, columnEnd: column, boundingBox: CodableRect(.zero))
     }
 
+    private func underlinedDocument(lines: [String], underlinedLineIndexes: Set<Int>) -> OCRDocument {
+        var tokens: [OCRToken] = []
+        let ocrLines = lines.enumerated().map { lineIndex, text -> OCRLine in
+            let lineTokens = text.compactMap { character -> OCRToken? in
+                guard !character.isWhitespace else { return nil }
+                return OCRToken(
+                    id: UUID(), text: String(character), boundingBox: CodableRect(.zero),
+                    confidence: 1, isLikelyUnderlined: underlinedLineIndexes.contains(lineIndex)
+                )
+            }
+            tokens.append(contentsOf: lineTokens)
+            return OCRLine(
+                id: UUID(), text: text, boundingBox: CodableRect(.zero), confidence: 1,
+                tokenIds: lineTokens.map(\.id)
+            )
+        }
+        let text = lines.joined(separator: "\n")
+        return OCRDocument(
+            id: UUID(), fullText: text, editedText: text, detectedLanguage: "en", createdAt: Date(),
+            blocks: [], lines: ocrLines, tokens: tokens, tables: []
+        )
+    }
+
     func testUnderlinePolicyFiltersStructuredRegionsAndRepeatedText() {
         XCTAssertTrue(OCRVisualCuePolicy.shouldSuppressUnderlineDetection(detectedCount: 40, totalCount: 80))
         XCTAssertFalse(OCRVisualCuePolicy.shouldSuppressUnderlineDetection(detectedCount: 5, totalCount: 10))
@@ -43,6 +66,47 @@ final class QuestionRenderingBehaviorTests: XCTestCase {
         XCTAssertNotNil(UnderlineTextMatcher.uniqueRange(of: "Serbian", in: "Serbian and Spanish"))
         XCTAssertFalse(OCRVisualCuePolicy.occursUniquely("conveyed", in: "information conveyed; information conveyed"))
         XCTAssertTrue(OCRVisualCuePolicy.occursUniquely("Serbian", in: "Serbian and Spanish"))
+    }
+
+    func testUnderlineSpansPreserveMultilineSentenceWithRepeatedWords() {
+        let firstLine = "Using data from the companies"
+        let secondLine = "to compare the companies."
+        let document = underlinedDocument(
+            lines: [
+                "A study introduces the research context before the evidence.",
+                firstLine,
+                secondLine,
+                "The question asks about the function of the underlined sentence."
+            ],
+            underlinedLineIndexes: [1, 2]
+        )
+
+        XCTAssertEqual(
+            OCRVisualCuePolicy.underlinedTextSpans(in: document),
+            ["Using data from the companies to compare the companies."]
+        )
+        XCTAssertNotNil(UnderlineTextMatcher.range(
+            of: "Using data from the companies to compare the companies.",
+            in: "Using data from the companies\nto compare the companies."
+        ))
+    }
+
+    func testUploadedUnderlinedSentenceFixtureRestoresFullSentenceSpan() async throws {
+        let fixtureURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("Fixtures/underlined_sentence_multiline.png")
+        let image = try XCTUnwrap(NSImage(contentsOf: fixtureURL))
+
+        let document = await OCRService().recognize(image: image, language: .english)
+        let spans = OCRVisualCuePolicy.underlinedTextSpans(in: document)
+        let normalizedSpans = spans.map { $0.split(whereSeparator: \.isWhitespace).joined(separator: " ") }
+
+        XCTAssertTrue(normalizedSpans.contains {
+            $0.contains("Using data spanning from 1994") && $0.contains("those companies.")
+        }, "Expected the fixture's full underlined sentence, got: \(spans)")
+        XCTAssertTrue(PromptBuilder().formatOCRPrompt(document: document).last?.content.contains(
+            "<u>Using data spanning from 1994"
+        ) == true)
     }
 
     func testSelectableQuestionRendererPartiallyRendersMalformedInlineMarkdown() {

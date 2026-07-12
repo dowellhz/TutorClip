@@ -72,6 +72,7 @@ private enum OCRVisualStyleDetector {
                 height: image.height
             )
         }
+        restoreLineUnderlines(in: &document, pixels: pixels, width: image.width, height: image.height)
         let rawDetectedCount = document.tokens.filter { $0.isLikelyUnderlined == true }.count
         let acceptedIDs = Set(OCRVisualCuePolicy.acceptedUnderlinedTokens(in: document).map(\.id))
         for index in document.tokens.indices where !acceptedIDs.contains(document.tokens[index].id) {
@@ -104,9 +105,86 @@ private enum OCRVisualStyleDetector {
         }
         return false
     }
+
+    private static func restoreLineUnderlines(
+        in document: inout OCRDocument,
+        pixels: [UInt8],
+        width: Int,
+        height: Int
+    ) {
+        let tokenIndexes = Dictionary(uniqueKeysWithValues: document.tokens.indices.map { (document.tokens[$0].id, $0) })
+        for line in document.lines {
+            let segments = horizontalUnderlineSegments(
+                below: line.boundingBox.cgRect,
+                pixels: pixels,
+                width: width,
+                height: height
+            )
+            guard !segments.isEmpty else { continue }
+            for tokenID in line.tokenIds {
+                guard let tokenIndex = tokenIndexes[tokenID] else { continue }
+                let box = document.tokens[tokenIndex].boundingBox.cgRect
+                if segments.contains(where: { substantiallyOverlaps(box: box, segment: $0, imageWidth: width) }) {
+                    document.tokens[tokenIndex].isLikelyUnderlined = true
+                }
+            }
+        }
+    }
+
+    private static func horizontalUnderlineSegments(
+        below line: CGRect,
+        pixels: [UInt8],
+        width: Int,
+        height: Int
+    ) -> [ClosedRange<Int>] {
+        let minX = max(0, min(width - 1, Int(line.minX * Double(width))))
+        let maxX = max(minX, min(width - 1, Int(line.maxX * Double(width))))
+        let lineBottom = Int((1 - line.minY) * Double(height))
+        let lineHeight = max(2, Int(line.height * Double(height)))
+        // Vision's line box can include or exclude the underline depending on the
+        // screenshot scale. Search the lower half of the line plus a small margin;
+        // the long-run requirement below excludes ordinary glyph strokes.
+        let minY = max(0, min(height - 1, lineBottom - max(3, lineHeight / 2)))
+        let maxY = max(minY, min(height - 1, lineBottom + max(3, lineHeight / 3)))
+        let minimumRun = max(8, Int(Double(maxX - minX + 1) * 0.12))
+        var segments: [ClosedRange<Int>] = []
+
+        for y in minY...maxY {
+            var runStart: Int?
+            for x in minX...maxX {
+                if pixels[y * width + x] < 105 {
+                    if runStart == nil { runStart = x }
+                } else if let start = runStart {
+                    if x - start >= minimumRun {
+                        segments.append(start...(x - 1))
+                    }
+                    runStart = nil
+                }
+            }
+            if let runStart, maxX - runStart + 1 >= minimumRun {
+                segments.append(runStart...maxX)
+            }
+        }
+        return segments
+    }
+
+    private static func substantiallyOverlaps(box: CGRect, segment: ClosedRange<Int>, imageWidth: Int) -> Bool {
+        let minX = Int(box.minX * Double(imageWidth))
+        let maxX = Int(box.maxX * Double(imageWidth))
+        let overlap = max(0, min(maxX, segment.upperBound) - max(minX, segment.lowerBound) + 1)
+        let tokenWidth = max(1, maxX - minX + 1)
+        return Double(overlap) / Double(tokenWidth) >= 0.45
+    }
 }
 
 enum OCRVisualCuePolicy {
+    private struct UnderlineFragment {
+        var lineIndex: Int
+        var text: String
+        var startsLine: Bool
+        var endsLine: Bool
+    }
+
     static func acceptedUnderlinedTokens(in document: OCRDocument) -> [OCRToken] {
         let tableRegions = document.structuredTables.map { $0.boundingBox.cgRect }
         let inferredTableTitleRegions = tableRegions.map { table in
@@ -131,6 +209,17 @@ enum OCRVisualCuePolicy {
         return candidates
     }
 
+    static func underlinedTextSpans(in document: OCRDocument) -> [String] {
+        let acceptedIDs = Set(acceptedUnderlinedTokens(in: document).map(\.id))
+        guard !acceptedIDs.isEmpty else { return [] }
+
+        let tokensByID = Dictionary(uniqueKeysWithValues: document.tokens.map { ($0.id, $0) })
+        let fragments = document.lines.enumerated().flatMap { lineIndex, line in
+            underlineFragments(in: line, lineIndex: lineIndex, tokensByID: tokensByID, acceptedIDs: acceptedIDs)
+        }
+        return expandSentenceSpans(mergeLineFragments(fragments), in: document)
+    }
+
     static func shouldSuppressUnderlineDetection(detectedCount: Int, totalCount: Int) -> Bool {
         guard totalCount > 0, detectedCount >= 6 else { return false }
         return Double(detectedCount) / Double(totalCount) >= 0.35
@@ -153,6 +242,114 @@ enum OCRVisualCuePolicy {
         let next = first.location + first.length
         let remaining = NSRange(location: next, length: source.length - next)
         return source.range(of: text, options: options, range: remaining).location == NSNotFound
+    }
+
+    private static func underlineFragments(
+        in line: OCRLine,
+        lineIndex: Int,
+        tokensByID: [UUID: OCRToken],
+        acceptedIDs: Set<UUID>
+    ) -> [UnderlineFragment] {
+        let lineTokens = line.tokenIds.compactMap { tokensByID[$0] }
+        guard !lineTokens.isEmpty else { return [] }
+
+        var result: [UnderlineFragment] = []
+        var tokenIndex = 0
+        var spanStart: String.Index?
+        var spanEnd: String.Index?
+
+        func appendFragment() {
+            guard let spanStart, let spanEnd else { return }
+            let prefix = line.text[..<spanStart]
+            let suffix = line.text[line.text.index(after: spanEnd)...]
+            result.append(UnderlineFragment(
+                lineIndex: lineIndex,
+                text: String(line.text[spanStart...spanEnd]),
+                startsLine: prefix.allSatisfy(\.isWhitespace),
+                endsLine: suffix.allSatisfy(\.isWhitespace)
+            ))
+        }
+
+        for index in line.text.indices {
+            let character = line.text[index]
+            guard !character.isWhitespace else { continue }
+            guard tokenIndex < lineTokens.count else { break }
+            let token = lineTokens[tokenIndex]
+            tokenIndex += 1
+
+            if acceptedIDs.contains(token.id) {
+                if spanStart == nil { spanStart = index }
+                spanEnd = index
+            } else if spanStart != nil {
+                appendFragment()
+                spanStart = nil
+                spanEnd = nil
+            }
+        }
+        appendFragment()
+        return result
+    }
+
+    private static func mergeLineFragments(_ fragments: [UnderlineFragment]) -> [String] {
+        var result: [String] = []
+        var previous: UnderlineFragment?
+
+        for fragment in fragments {
+            if let previous,
+               previous.lineIndex + 1 == fragment.lineIndex,
+               previous.endsLine,
+               fragment.startsLine,
+               !result.isEmpty {
+                result[result.count - 1] += " " + fragment.text
+            } else {
+                result.append(fragment.text)
+            }
+            previous = fragment
+        }
+        return result
+    }
+
+    private static func expandSentenceSpans(_ spans: [String], in document: OCRDocument) -> [String] {
+        guard spans.count >= 2 else { return spans }
+        let source = document.lines.map(\.text).joined(separator: " ")
+        let normalizedSpans = spans.map(normalizedWhitespace)
+        var replacements: [Int: String] = [:]
+
+        for sentence in sentences(in: source) {
+            let normalizedSentence = normalizedWhitespace(sentence)
+            let matchingIndexes = normalizedSpans.indices.filter { normalizedSentence.contains(normalizedSpans[$0]) }
+            let matchedCharacterCount = matchingIndexes.reduce(0) { $0 + normalizedSpans[$1].count }
+            guard matchingIndexes.count >= 2,
+                  Double(matchedCharacterCount) / Double(max(1, normalizedSentence.count)) >= 0.35,
+                  let first = matchingIndexes.first else { continue }
+            replacements[first] = sentence
+            for index in matchingIndexes.dropFirst() {
+                replacements[index] = ""
+            }
+        }
+
+        return spans.enumerated().compactMap { index, span in
+            guard let replacement = replacements[index] else { return span }
+            return replacement.isEmpty ? nil : replacement
+        }
+    }
+
+    private static func sentences(in text: String) -> [String] {
+        var result: [String] = []
+        var start = text.startIndex
+        for index in text.indices where ".?!".contains(text[index]) {
+            let end = text.index(after: index)
+            let sentence = text[start..<end].trimmingCharacters(in: .whitespacesAndNewlines)
+            if !sentence.isEmpty { result.append(sentence) }
+            start = end
+        }
+        let remainder = text[start...].trimmingCharacters(in: .whitespacesAndNewlines)
+        if !remainder.isEmpty { result.append(remainder) }
+        return result
+    }
+
+    private static func normalizedWhitespace(_ text: String) -> String {
+        text.split(whereSeparator: \.isWhitespace).joined(separator: " ").lowercased()
     }
 }
 
