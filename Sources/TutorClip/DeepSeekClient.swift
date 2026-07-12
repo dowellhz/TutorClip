@@ -74,11 +74,13 @@ final class DeepSeekClient: DeepSeekStreaming {
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
+        let model = modelOverride ?? DeepSeekModel.flash.rawValue
         let body = DeepSeekRequest(
-            model: modelOverride ?? DeepSeekModel.flash.rawValue,
+            model: model,
             messages: messages,
             temperature: temperatureOverride ?? settingsStore.settings.temperature,
-            stream: true
+            stream: true,
+            thinking: model == DeepSeekModel.flash.rawValue ? .disabled : nil
         )
         request.httpBody = try JSONEncoder().encode(body)
 
@@ -191,10 +193,17 @@ struct DeepSeekMessage: Codable {
 }
 
 private struct DeepSeekRequest: Codable {
+    struct Thinking: Codable {
+        var type: String
+
+        static let disabled = Thinking(type: "disabled")
+    }
+
     var model: String
     var messages: [DeepSeekMessage]
     var temperature: Double
     var stream: Bool
+    var thinking: Thinking?
 }
 
 private struct DeepSeekStreamEvent: Codable {

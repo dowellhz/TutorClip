@@ -34,7 +34,7 @@ enum OCRFormatState: Equatable {
         case .idle:
             return ""
         case .formatting:
-            return language.text("正在用 DeepSeek 整理题目排版...", "Formatting the question with DeepSeek...")
+            return language.text("本地 OCR 已可阅读；正在用 Flash 整理排版...", "Local OCR is ready; Flash is formatting it...")
         case .applied:
             return language.text("题目已按 Markdown 排版。", "Question was formatted as Markdown.")
         case .failed(let reason):

@@ -105,8 +105,11 @@ struct PromptBuilder {
     }
 
     func formatOCRPrompt(document: OCRDocument) -> [DeepSeekMessage] {
-        let structure = formattingStructureSummary(for: document, includeTokenLayout: true)
         let underlineSpans = OCRVisualCuePolicy.underlinedTextSpans(in: document)
+        if document.structuredTables.isEmpty, underlineSpans.isEmpty {
+            return compactFormatOCRPrompt(document: document)
+        }
+        let structure = formattingStructureSummary(for: document, includeTokenLayout: true)
         let underlineContext = underlineSpans.isEmpty
             ? "(无)"
             : underlineSpans.map { "<u>\($0)</u>" }.joined(separator: "\n")
@@ -205,6 +208,16 @@ struct PromptBuilder {
                 \(structure.isEmpty ? "(无结构摘要)" : structure)
                 """
             )
+        ]
+    }
+
+    private func compactFormatOCRPrompt(document: OCRDocument) -> [DeepSeekMessage] {
+        [
+            DeepSeekMessage(role: "system", content: """
+            你是 SAT OCR 排版整理器。只调整空格、换行、段落和 A/B/C/D 选项排列；不得增删、改写、翻译或猜测任何字符。题干和每个选项之间各留一个空白行。不要解释或添加 Markdown 装饰。
+            只输出：FORMATTED_QUESTION、整理后的题目、END_FORMATTED_QUESTION、QUESTION_METADATA、Type: reading/writing/notesSynthesis/vocabulary/grammar/math/unknown、END_QUESTION_METADATA。
+            """),
+            DeepSeekMessage(role: "user", content: "OCR 文本：\n\(document.editedText)")
         ]
     }
 

@@ -44,15 +44,18 @@ extension TutorViewModel {
         answerVerificationTask?.cancel()
         let startedAt = Date()
         let task = Task { [deepSeekClient, promptBuilder] in
-            do {
-                let result = try await AnswerVerificationService(client: deepSeekClient, promptBuilder: promptBuilder)
+            let outcome = await AsyncTimeoutRace.run(timeoutNanoseconds: 15_000_000_000) {
+                try? await AnswerVerificationService(client: deepSeekClient, promptBuilder: promptBuilder)
                     .verify(question: question, requiresCrossCheck: requiresCrossCheck)
+            }
+            switch outcome {
+            case .value(let result):
                 PipelineTimingMetrics.record(stage: "Pro answer verification", duration: Date().timeIntervalSince(startedAt))
                 return result
-            } catch is CancellationError {
+            case .timedOut:
+                RuntimeLog.write("answer-verification-timeout seconds=15")
                 return nil
-            } catch {
-                RuntimeLog.write("answer-verification-background-failed \(error.localizedDescription)")
+            case .cancelled:
                 return nil
             }
         }
