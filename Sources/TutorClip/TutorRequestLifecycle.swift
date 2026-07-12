@@ -35,8 +35,12 @@ extension TutorViewModel {
 
     func beginAnswerVerification(for question: String) -> Task<AnswerVerification?, Never>? {
         guard TutorQuestionParsing.answerChoices(from: question).count >= 2 else { return nil }
+        let normalizedQuestion = question.lowercased()
+        let isHighRiskInference = normalizedQuestion.contains("most logically completes the text")
+            || normalizedQuestion.contains("can therefore be inferred")
         let requiresCrossCheck = OCRConfidenceAssessment.shouldWarn(confidences: session.ocrDocument.lines.map(\.confidence))
             || TutorQuestionParsing.answerChoices(from: question).count != 4
+            || isHighRiskInference
         answerVerificationTask?.cancel()
         let task = Task { [deepSeekClient, promptBuilder] in
             do {
