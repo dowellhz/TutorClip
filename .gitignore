@@ -22,3 +22,6 @@ config.json
 
 # Public application icon assets are the only committed raster images.
 !Resources/Assets.xcassets/AppIcon.appiconset/*.png
+
+# Curated product screenshots used by the public README.
+!docs/screenshots/*.png

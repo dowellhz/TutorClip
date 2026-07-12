@@ -2,6 +2,16 @@
 
 TutorClip is a macOS 26+ personal SAT screenshot tutor.
 
+## Screenshots
+
+| Adaptive practice workspace | Knowledge map |
+| --- | --- |
+| ![TutorClip adaptive practice workspace](docs/screenshots/practice-workspace.png) | ![TutorClip SAT knowledge map](docs/screenshots/knowledge-map.png) |
+
+| Vocabulary review |
+| --- |
+| ![TutorClip vocabulary review](docs/screenshots/vocabulary-review.png) |
+
 ## Build
 
 ```sh
