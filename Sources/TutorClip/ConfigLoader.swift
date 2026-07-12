@@ -35,7 +35,7 @@ final class ConfigLoader: ObservableObject {
             return DeepSeekConfig(
                 apiKey: key,
                 baseURL: fileConfig.deepseekBaseURL ?? settings.deepseekBaseURL,
-                model: fileConfig.model ?? settings.deepseekModel,
+                model: DeepSeekModel.normalizedModelID(fileConfig.model ?? settings.deepseekModel),
                 keySource: .configFile
             )
         }
@@ -64,6 +64,13 @@ final class ConfigLoader: ObservableObject {
     func removePersistedAPIKey() throws {
         guard var config = readFileConfig() else { return }
         config.deepseekApiKey = nil
+        try writeFileConfig(config)
+    }
+
+    func updatePersistedConnectionSettings(_ settings: AppSettings) throws {
+        guard var config = readFileConfig() else { return }
+        config.deepseekBaseURL = settings.deepseekBaseURL
+        config.model = DeepSeekModel.normalizedModelID(settings.deepseekModel)
         try writeFileConfig(config)
     }
 

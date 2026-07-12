@@ -70,6 +70,16 @@ final class SettingsViewModel: ObservableObject {
             saveStatusIsError = true
             return
         }
+        do {
+            try configLoader.updatePersistedConnectionSettings(settings)
+        } catch {
+            saveStatusMessage = settings.appLanguage.text(
+                "DeepSeek 设置同步失败：\(error.localizedDescription)",
+                "Failed to synchronize DeepSeek settings: \(error.localizedDescription)"
+            )
+            saveStatusIsError = true
+            return
+        }
         configLoader.temporaryAPIKey = temporaryAPIKey
         let launchUpdateError = applyLaunchAtLoginIfNeeded(previousValue: previousSettings.launchAtLogin)
         keySource = configLoader.currentConfig(settings: settingsStore.settings).keySource.rawValue

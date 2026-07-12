@@ -35,6 +35,30 @@ final class InfrastructureBehaviorTests: XCTestCase {
         XCTAssertThrowsError(try loader.persistTemporaryAPIKey(settings: AppSettings()))
     }
 
+    @MainActor
+    func testConfigLoaderUpdatesPersistedModelWithoutReplacingAPIKey() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tutorclip-model-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let loader = ConfigLoader(baseDirectory: directory)
+        loader.temporaryAPIKey = "synthetic-test-key"
+        try loader.persistTemporaryAPIKey(settings: AppSettings())
+
+        var settings = AppSettings()
+        settings.deepseekModel = DeepSeekModel.pro.rawValue
+        try loader.updatePersistedConnectionSettings(settings)
+
+        let reloaded = ConfigLoader(baseDirectory: directory)
+        let config = reloaded.currentConfig(settings: AppSettings())
+        XCTAssertEqual(config.apiKey, "synthetic-test-key")
+        XCTAssertEqual(config.model, DeepSeekModel.pro.rawValue)
+    }
+
+    func testDeepSeekModelMapsLegacyAliasesToFlash() {
+        XCTAssertEqual(DeepSeekModel(modelID: "deepseek-chat"), .flash)
+        XCTAssertEqual(DeepSeekModel(modelID: "deepseek-v4-pro"), .pro)
+    }
+
     func testPracticeVariationCyclesAndRetainsOnlyFiveRecentQuestions() {
         let planner = PracticeVariationPlanner()
         let first = planner.nextVariation()

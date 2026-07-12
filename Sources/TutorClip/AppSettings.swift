@@ -38,6 +38,31 @@ enum AppLanguage: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+enum DeepSeekModel: String, Codable, CaseIterable, Identifiable {
+    case flash = "deepseek-v4-flash"
+    case pro = "deepseek-v4-pro"
+
+    var id: String { rawValue }
+
+    init(modelID: String) {
+        self = modelID == Self.pro.rawValue ? .pro : .flash
+    }
+
+    static func normalizedModelID(_ modelID: String) -> String {
+        switch modelID {
+        case "deepseek-chat", "deepseek-reasoner": return Self.flash.rawValue
+        default: return modelID
+        }
+    }
+
+    func title(language: AppLanguage) -> String {
+        switch self {
+        case .flash: return language.text("Flash（更快）", "Flash (Faster)")
+        case .pro: return language.text("Pro（更强推理）", "Pro (Stronger reasoning)")
+        }
+    }
+}
+
 struct AppSettings: Codable, Equatable {
     var shortcutKeyCode: UInt32 = KeyCodeDisplay.defaultKeyCode
     var shortcutModifiers: UInt32 = KeyCodeDisplay.defaultModifiers
@@ -47,7 +72,7 @@ struct AppSettings: Codable, Equatable {
     var ocrLanguage: OCRLanguage = .english
     var appLanguage: AppLanguage = .chinese
     var deepseekBaseURL: String = "https://api.deepseek.com"
-    var deepseekModel: String = "deepseek-chat"
+    var deepseekModel: String = DeepSeekModel.flash.rawValue
     var temperature: Double = 0.3
     var hasCompletedOnboarding: Bool = false
 
@@ -63,7 +88,8 @@ struct AppSettings: Codable, Equatable {
         ocrLanguage = try values.decodeIfPresent(OCRLanguage.self, forKey: .ocrLanguage) ?? ocrLanguage
         appLanguage = try values.decodeIfPresent(AppLanguage.self, forKey: .appLanguage) ?? appLanguage
         deepseekBaseURL = try values.decodeIfPresent(String.self, forKey: .deepseekBaseURL) ?? deepseekBaseURL
-        deepseekModel = try values.decodeIfPresent(String.self, forKey: .deepseekModel) ?? deepseekModel
+        let storedModel = try values.decodeIfPresent(String.self, forKey: .deepseekModel) ?? deepseekModel
+        deepseekModel = DeepSeekModel.normalizedModelID(storedModel)
         temperature = try values.decodeIfPresent(Double.self, forKey: .temperature) ?? temperature
         hasCompletedOnboarding = try values.decodeIfPresent(Bool.self, forKey: .hasCompletedOnboarding) ?? false
     }
