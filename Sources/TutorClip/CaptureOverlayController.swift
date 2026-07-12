@@ -18,8 +18,10 @@ final class CaptureOverlayController {
     private var globalKeyMonitor: Any?
     private var timeoutTimer: Timer?
     private var captureTask: Task<Void, Never>?
+    private let appLanguage: AppLanguage
 
-    init(completion: @escaping @MainActor (CaptureResult) -> Void) {
+    init(appLanguage: AppLanguage, completion: @escaping @MainActor (CaptureResult) -> Void) {
+        self.appLanguage = appLanguage
         self.completion = completion
         RuntimeLog.write("capture-controller-init")
     }
@@ -46,7 +48,7 @@ final class CaptureOverlayController {
             }
         }
         windows = NSScreen.screens.map { screen in
-            let window = CaptureOverlayWindow(screen: screen) { [weak self] action in
+            let window = CaptureOverlayWindow(screen: screen, appLanguage: appLanguage) { [weak self] action in
                 self?.handle(action)
             }
             window.orderFrontRegardless()
@@ -63,6 +65,8 @@ final class CaptureOverlayController {
 
     private func handle(_ action: CaptureOverlayAction) {
         switch action {
+        case .interaction:
+            startTimeoutTimer()
         case .cancelled:
             RuntimeLog.write("capture-action-cancelled")
             finish(.cancelled)

@@ -27,11 +27,6 @@ struct SettingsView: View {
             footer
         }
         .background(panelBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-        )
         .frame(width: 560, height: 560)
     }
 
@@ -156,15 +151,26 @@ struct SettingsView: View {
                 }
             }
             .pickerStyle(.segmented)
+            .accessibilityIdentifier("settings.appLanguage")
 
             Picker(language.text("OCR 语言", "OCR Language"), selection: $viewModel.settings.ocrLanguage) {
-                ForEach(OCRLanguage.allCases) { language in
-                    Text(language.rawValue.capitalized).tag(language)
+                ForEach(OCRLanguage.allCases) { ocrLanguage in
+                    Text(ocrLanguage.rawValue.capitalized).tag(ocrLanguage)
                 }
             }
             .pickerStyle(.segmented)
+            .accessibilityIdentifier("settings.ocrLanguage")
 
-            Toggle(language.text("保存 OCR 和对话历史", "Save OCR and chat history"), isOn: $viewModel.settings.historyEnabled)
+            Toggle(language.text("保存学习进度", "Save learning progress"), isOn: $viewModel.settings.learningProgressEnabled)
+                .accessibilityIdentifier("settings.learningProgress")
+            Text(language.text("保存答题证据、掌握状态、复习日期和生词，不包含截图。", "Saves answer evidence, mastery, review dates, and vocabulary; never screenshots."))
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+            Toggle(language.text("保存题目和对话历史", "Save question and chat history"), isOn: $viewModel.settings.historyEnabled)
+                .accessibilityIdentifier("settings.history")
+            Text(language.text("保存 OCR 文字、结构化文字、题目和对话，不包含截图。", "Saves OCR text, structured text, questions, and chats; never screenshots."))
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
             Toggle(language.text("登录时启动", "Launch at Login"), isOn: $viewModel.settings.launchAtLogin)
             Text(viewModel.launchAtLoginMessage)
                 .font(.system(size: 12))
@@ -175,6 +181,14 @@ struct SettingsView: View {
                     : language.text("清空历史", "Clear History")
             ) { viewModel.clearHistory() }
                 .disabled(viewModel.isClearingHistory)
+                .accessibilityIdentifier("settings.clearHistory")
+            chromeButton(
+                viewModel.isClearingLearningProgress
+                    ? language.text("正在清空学习进度…", "Clearing learning progress…")
+                    : language.text("清空学习进度", "Clear Learning Progress")
+            ) { viewModel.clearLearningProgress() }
+                .disabled(viewModel.isClearingLearningProgress)
+                .accessibilityIdentifier("settings.clearLearningProgress")
             if !viewModel.historyStatusMessage.isEmpty {
                 Text(viewModel.historyStatusMessage)
                     .font(.system(size: 12))
@@ -192,6 +206,7 @@ struct SettingsView: View {
                         : language.text("运行诊断", "Run Diagnostics")
                 ) { viewModel.runDiagnostics() }
                     .disabled(viewModel.isRunningDiagnostics)
+                    .accessibilityIdentifier("settings.runDiagnostics")
                 Spacer()
             }
             ForEach(viewModel.diagnostics) { item in
@@ -220,6 +235,7 @@ struct SettingsView: View {
             .font(.system(size: 12))
             Spacer()
             Button(language.text("保存", "Save")) { viewModel.save() }
+                .accessibilityIdentifier("settings.save")
                 .buttonStyle(PrimaryCapsuleSettingsButtonStyle())
                 .focusable(false)
         }
@@ -316,6 +332,7 @@ struct SettingsView: View {
 private struct ChromeSettingsButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
+            .focusEffectDisabled()
             .font(.system(size: 13, weight: .medium))
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
@@ -330,6 +347,7 @@ private struct ChromeSettingsButtonStyle: ButtonStyle {
 private struct PrimaryCapsuleSettingsButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
+            .focusEffectDisabled()
             .font(.system(size: 13, weight: .semibold))
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)

@@ -12,15 +12,53 @@ final class MenuBarController: NSObject {
         super.init()
         statusItem.button?.title = "TutorClip"
         buildMenu()
+        buildApplicationMenu()
     }
 
     func refresh() {
         buildMenu()
+        buildApplicationMenu()
+    }
+
+    private func buildApplicationMenu() {
+        let language = coordinator?.settingsStore.settings.appLanguage ?? .chinese
+        let mainMenu = NSMenu()
+
+        let appItem = NSMenuItem(title: "TutorClip", action: nil, keyEquivalent: "")
+        let appMenu = NSMenu(title: "TutorClip")
+        let about = NSMenuItem(
+            title: language.text("关于 TutorClip", "About TutorClip"),
+            action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
+            keyEquivalent: ""
+        )
+        about.target = NSApp
+        appMenu.addItem(about)
+        appMenu.addItem(.separator())
+        let settings = NSMenuItem(title: language.text("设置…", "Settings…"), action: #selector(self.settings), keyEquivalent: ",")
+        settings.target = self
+        appMenu.addItem(settings)
+        appMenu.addItem(.separator())
+        let hide = NSMenuItem(title: language.text("隐藏 TutorClip", "Hide TutorClip"), action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        hide.target = NSApp
+        appMenu.addItem(hide)
+        let quit = NSMenuItem(title: language.text("退出 TutorClip", "Quit TutorClip"), action: #selector(self.quit), keyEquivalent: "q")
+        quit.target = self
+        appMenu.addItem(quit)
+        appItem.submenu = appMenu
+        mainMenu.addItem(appItem)
+
+        let editItem = NSMenuItem(title: language.text("编辑", "Edit"), action: nil, keyEquivalent: "")
+        let editMenu = NSMenu(title: editItem.title)
+        for item in ApplicationEditMenuItems.make(language: language) { editMenu.addItem(item) }
+        editItem.submenu = editMenu
+        mainMenu.addItem(editItem)
+        NSApp.mainMenu = mainMenu
     }
 
     private func buildMenu() {
         let language = coordinator?.settingsStore.settings.appLanguage ?? .chinese
         let menu = NSMenu()
+        menu.addItem(NSMenuItem(title: language.text("打开 TutorClip", "Open TutorClip"), action: #selector(openMain), keyEquivalent: ""))
         menu.delegate = self
         menu.addItem(NSMenuItem(title: language.text("截图", "Capture"), action: #selector(capture), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: language.text("历史", "History"), action: #selector(history), keyEquivalent: ""))
@@ -39,6 +77,10 @@ final class MenuBarController: NSObject {
 
     @objc private func capture() {
         coordinator?.beginCapture()
+    }
+
+    @objc private func openMain() {
+        coordinator?.showMainWindow()
     }
 
     @objc private func settings() {
@@ -79,6 +121,19 @@ final class MenuBarController: NSObject {
             submenu.addItem(item)
         }
         return submenu
+    }
+}
+
+enum ApplicationEditMenuItems {
+    static func make(language: AppLanguage) -> [NSMenuItem] {
+        let undo = NSMenuItem(title: language.text("撤销", "Undo"), action: Selector(("undo:")), keyEquivalent: "z")
+        let redo = NSMenuItem(title: language.text("重做", "Redo"), action: Selector(("redo:")), keyEquivalent: "Z")
+        redo.keyEquivalentModifierMask = [.command, .shift]
+        let cut = NSMenuItem(title: language.text("剪切", "Cut"), action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        let copy = NSMenuItem(title: language.text("复制", "Copy"), action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        let paste = NSMenuItem(title: language.text("粘贴", "Paste"), action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        let selectAll = NSMenuItem(title: language.text("全选", "Select All"), action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        return [undo, redo, .separator(), cut, copy, paste, .separator(), selectAll]
     }
 }
 

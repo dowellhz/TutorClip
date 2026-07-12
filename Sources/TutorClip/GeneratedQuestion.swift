@@ -5,6 +5,7 @@ struct GeneratedQuestion {
     var answer: String?
     var category: SessionCategory?
     var learningMetadata: SATLearningMetadata
+    var contract: GeneratedQuestionContract
 
     static func parse(_ raw: String, requireQuestionBlock: Bool = false) -> GeneratedQuestion {
         let metadataParsed = QuestionMetadata.extract(from: stripCodeFences(raw))
@@ -24,7 +25,8 @@ struct GeneratedQuestion {
             question: question,
             answer: metadataParsed.metadata.answer,
             category: metadataParsed.metadata.category,
-            learningMetadata: SATLearningMetadata(questionMetadata: metadataParsed.metadata, isAIGenerated: true)
+            learningMetadata: SATLearningMetadata(questionMetadata: metadataParsed.metadata, isAIGenerated: true),
+            contract: GeneratedQuestionContract.parse(raw)
         )
     }
 
@@ -58,5 +60,33 @@ struct GeneratedQuestion {
             end = previous
         }
         return Array(lines[start..<end])
+    }
+}
+
+struct GeneratedQuestionContract: Equatable {
+    var teachingPurpose = ""
+    var prerequisites = ""
+    var distractors: [String] = []
+    var explanationBasis = ""
+
+    var isComplete: Bool {
+        !teachingPurpose.isEmpty && !prerequisites.isEmpty && distractors.count == 4 && !explanationBasis.isEmpty
+    }
+
+    static func parse(_ raw: String) -> GeneratedQuestionContract {
+        let allowed = Set(["TeachingPurpose", "Prerequisites", "DistractorA", "DistractorB", "DistractorC", "DistractorD", "ExplanationBasis"])
+        var fields: [String: String] = [:]
+        for line in raw.components(separatedBy: .newlines) {
+            guard let separator = line.firstIndex(of: ":") else { continue }
+            let key = line[..<separator].trimmingCharacters(in: .whitespacesAndNewlines)
+            let value = line[line.index(after: separator)...].trimmingCharacters(in: .whitespacesAndNewlines)
+            if allowed.contains(key), !value.isEmpty { fields[key] = value }
+        }
+        return GeneratedQuestionContract(
+            teachingPurpose: fields["TeachingPurpose"] ?? "",
+            prerequisites: fields["Prerequisites"] ?? "",
+            distractors: ["DistractorA", "DistractorB", "DistractorC", "DistractorD"].compactMap { fields[$0] },
+            explanationBasis: fields["ExplanationBasis"] ?? ""
+        )
     }
 }

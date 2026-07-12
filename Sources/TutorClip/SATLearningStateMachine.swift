@@ -12,7 +12,7 @@ enum SATLearningStateMachine {
         SATReviewScheduler.apply(status: status, to: &metadata, now: now)
         switch status {
         case .known:
-            if metadata.consecutiveCorrect >= 3, let next = metadata.nextReviewAt {
+            if qualifiesForImmediateMastery(metadata), let next = metadata.nextReviewAt {
                 metadata.masteryState = .mastered
                 return .stableMastery(next)
             }
@@ -44,10 +44,22 @@ enum SATLearningStateMachine {
         )
         guard countsTowardMastery else { return isCorrect }
         if isCorrect {
-            metadata.masteryState = metadata.consecutiveCorrect >= 3 && !usedHint ? .mastered : .pendingVerification
+            metadata.masteryState = !usedHint && qualifiesForImmediateMastery(metadata) ? .mastered : .pendingVerification
         } else {
             metadata.masteryState = .learning
         }
         return isCorrect
+    }
+
+    private static func qualifiesForImmediateMastery(_ metadata: SATLearningMetadata) -> Bool {
+        let independentCorrect = metadata.attempts.filter {
+            $0.wasCorrect && !$0.usedHint && $0.countsTowardMastery
+        }.count
+        guard independentCorrect > 0 else { return false }
+        let complexities = metadata.knowledgePointIDs.map(SATKnowledgeGraph.complexity)
+        if !complexities.isEmpty, complexities.allSatisfy({ $0 == .simple }) {
+            return true
+        }
+        return independentCorrect >= 2
     }
 }

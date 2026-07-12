@@ -23,6 +23,10 @@ final class RuntimeLogFileWriter: @unchecked Sendable {
                 at: fileURL.deletingLastPathComponent(),
                 withIntermediateDirectories: true
             )
+            try FileManager.default.setAttributes(
+                [.posixPermissions: 0o700],
+                ofItemAtPath: fileURL.deletingLastPathComponent().path
+            )
             try rotateIfNeeded(incomingByteCount: data.count)
             try append(data)
             return true

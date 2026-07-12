@@ -20,10 +20,12 @@ final class SettingsViewModel: ObservableObject {
     @Published var historyStatusMessage: String = ""
     @Published var historyStatusIsError: Bool = false
     @Published var isClearingHistory: Bool = false
+    @Published var isClearingLearningProgress: Bool = false
 
     private let settingsStore: SettingsStore
     private let configLoader: ConfigLoader
     private let historyStore: HistoryStore
+    private let masteryEvidenceStore: MasteryEvidenceStore?
     private let onShortcutChanged: () -> Void
     private let updateLaunchAtLogin: @MainActor (Bool) throws -> Void
     private let diagnosticsRunner: (AppSettings, ShortcutRegistrationResult, DeepSeekConfig) async -> [DiagnosticItem]
@@ -34,6 +36,7 @@ final class SettingsViewModel: ObservableObject {
         settingsStore: SettingsStore,
         configLoader: ConfigLoader,
         historyStore: HistoryStore,
+        masteryEvidenceStore: MasteryEvidenceStore? = nil,
         onShortcutChanged: @escaping () -> Void,
         updateLaunchAtLogin: @escaping @MainActor (Bool) throws -> Void = SettingsViewModel.updateSystemLaunchAtLogin,
         diagnosticsRunner: @escaping (AppSettings, ShortcutRegistrationResult, DeepSeekConfig) async -> [DiagnosticItem] = DiagnosticsService.runWithCaptureProbe
@@ -41,6 +44,7 @@ final class SettingsViewModel: ObservableObject {
         self.settingsStore = settingsStore
         self.configLoader = configLoader
         self.historyStore = historyStore
+        self.masteryEvidenceStore = masteryEvidenceStore
         self.onShortcutChanged = onShortcutChanged
         self.updateLaunchAtLogin = updateLaunchAtLogin
         self.diagnosticsRunner = diagnosticsRunner
@@ -159,6 +163,24 @@ final class SettingsViewModel: ObservableObject {
                 ? self.settings.appLanguage.text("历史已清空。", "History cleared.")
                 : self.settings.appLanguage.text("清空历史失败，请查看运行日志。", "Failed to clear history. Check the runtime log.")
         }
+    }
+
+    func clearLearningProgress() {
+        guard !isClearingLearningProgress else { return }
+        isClearingLearningProgress = true
+        masteryEvidenceStore?.clear { [weak self] evidenceCleared in
+            guard let self else { return }
+            self.historyStore.clearManualMastery { [weak self] manualCleared in
+                guard let self else { return }
+                let success = evidenceCleared && manualCleared
+                self.isClearingLearningProgress = false
+                self.historyStatusIsError = !success
+                self.historyStatusMessage = success
+                    ? self.settings.appLanguage.text("学习进度已清空。", "Learning progress cleared.")
+                    : self.settings.appLanguage.text("学习进度清空失败。", "Failed to clear learning progress.")
+            }
+        }
+        if masteryEvidenceStore == nil { isClearingLearningProgress = false }
     }
 
     func runDiagnostics() {

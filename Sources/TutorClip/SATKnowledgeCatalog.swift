@@ -15,10 +15,10 @@ struct SATKnowledgePointDefinition: Identifiable, Equatable {
     let titleEN: String
 }
 
-/// Stable, versioned IDs for the complete College Board Reading and Writing skill tree.
+/// Stable, versioned IDs for the College Board Reading and Writing skill tree.
 /// The question-type level is official; knowledge points are TutorClip's teachable mastery units.
 enum SATKnowledgeCatalog {
-    static let version = 1
+    static let version = 2
 
     static let questionTypes: [SATQuestionTypeDefinition] = [
         type("RW.II.CID", "Information and Ideas", "Central Ideas and Details", "主旨与细节", "Central Ideas and Details"),

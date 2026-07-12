@@ -99,7 +99,14 @@ enum SessionCategory: String, Codable, CaseIterable {
 
 enum SessionTitle {
     static func make(from text: String) -> String {
-        let normalized = text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        let readable = text
+            .replacingOccurrences(of: "*", with: "")
+            .replacingOccurrences(of: "`", with: "")
+            .replacingOccurrences(of: ">", with: "")
+            .replacingOccurrences(of: "<u>", with: "", options: .caseInsensitive)
+            .replacingOccurrences(of: "</u>", with: "", options: .caseInsensitive)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "# "))
+        let normalized = readable.split(whereSeparator: \.isWhitespace).joined(separator: " ")
         if normalized.isEmpty { return "Untitled Session" }
         return String(normalized.prefix(54))
     }

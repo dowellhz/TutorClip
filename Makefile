@@ -4,6 +4,7 @@ BUILD_DIR := .build
 APP_DIR := $(BUILD_DIR)/$(APP_NAME).app
 LOCAL_APP_DIR := $(HOME)/Applications/$(APP_NAME).app
 XCODE_DERIVED_DATA := .xcode-derived
+XCODE_TEST_DERIVED_DATA := .xcode-derived-tests
 XCODE_APP_DIR := $(XCODE_DERIVED_DATA)/Build/Products/Debug/$(APP_NAME).app
 RELEASE_APP_DIR := $(XCODE_DERIVED_DATA)/Build/Products/Release/$(APP_NAME).app
 RELEASE_DIR := $(BUILD_DIR)/release
@@ -15,7 +16,7 @@ MACOS_DIR := $(CONTENTS_DIR)/MacOS
 RESOURCES_DIR := $(CONTENTS_DIR)/Resources
 SOURCES := $(shell find Sources/TutorClip -name '*.swift' | sort)
 
-.PHONY: all build test xcode-build xcode-build-signed release-app package-dmg notarize-dmg release-notarized install-current-signed-local install-signed-local run-signed-local run-signed-demo-local diagnose-signed-local diagnose-app-signed-local request-permissions-signed-local xcode-run xcode-run-signed xcode-run-demo xcode-run-demo-signed xcode-diagnose xcode-diagnose-signed xcode-request-permissions xcode-request-permissions-signed verify-signed verify-table-ai run run-demo install-local run-local diagnose request-permissions verify clean
+.PHONY: all build test test-visible verify-automated xcode-build xcode-build-signed release-app package-dmg notarize-dmg release-notarized install-current-signed-local install-signed-local run-signed-local run-signed-demo-local diagnose-signed-local diagnose-app-signed-local request-permissions-signed-local xcode-run xcode-run-signed xcode-run-demo xcode-run-demo-signed xcode-diagnose xcode-diagnose-signed xcode-request-permissions xcode-request-permissions-signed verify-signed verify-table-ai run run-demo install-local run-local diagnose request-permissions verify clean
 
 all: xcode-build
 
@@ -27,7 +28,14 @@ build: xcode-build-signed
 	-/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$(CURDIR)/$(APP_DIR)"
 
 test:
-	xcodebuild -quiet -project $(APP_NAME).xcodeproj -scheme $(APP_NAME) -configuration Debug -destination 'platform=macOS,arch=arm64' -derivedDataPath "$(XCODE_DERIVED_DATA)" test CODE_SIGNING_ALLOWED=NO ONLY_ACTIVE_ARCH=YES ARCHS=arm64
+	xcodebuild -quiet -project $(APP_NAME).xcodeproj -scheme $(APP_NAME) -configuration Debug -destination 'platform=macOS,arch=arm64' -derivedDataPath "$(XCODE_TEST_DERIVED_DATA)" test CODE_SIGNING_ALLOWED=NO ONLY_ACTIVE_ARCH=YES ARCHS=arm64
+
+test-visible:
+	-osascript -e 'tell application "TutorClip" to quit'
+	sleep 1
+	xcodebuild -project $(APP_NAME).xcodeproj -scheme TutorClipVisibleUITests -configuration Debug -destination 'platform=macOS,arch=arm64' -derivedDataPath "$(XCODE_TEST_DERIVED_DATA)" test DEVELOPMENT_TEAM="$(DEVELOPMENT_TEAM)" CODE_SIGN_STYLE=Automatic -allowProvisioningUpdates ONLY_ACTIVE_ARCH=YES ARCHS=arm64
+
+verify-automated: verify test-visible
 
 run: run-local
 
@@ -153,4 +161,4 @@ verify-signed: xcode-build-signed
 	codesign -dv "$(XCODE_APP_DIR)"
 
 clean:
-	rm -rf "$(BUILD_DIR)"
+	rm -rf "$(BUILD_DIR)" "$(XCODE_DERIVED_DATA)" "$(XCODE_TEST_DERIVED_DATA)"

@@ -32,7 +32,9 @@ extension TutorViewModel {
     }
 
     private var hasIndependentCorrectEvidence: Bool {
-        session.learningMetadata.attempts.last.map { $0.wasCorrect && !$0.usedHint } ?? false
+        session.learningMetadata.attempts.contains {
+            $0.wasCorrect && !$0.usedHint && $0.countsTowardMastery
+        }
     }
 
     private func currentQuestionSnapshot(role: SATQuestionChainRole) -> SATQuestionSnapshot {
@@ -87,24 +89,28 @@ extension TutorViewModel {
         guard let gap = session.learningMetadata.needsReviewFlow.gap else { return }
         learningLoadingAction = .foundation
         session.learningMetadata.needsReviewFlow.stage = .foundation
+        session.learningMetadata.needsReviewFlow.learningFocus = nil
         let isEnglishFlow = gap == .englishReading
         learningFeedback = isEnglishFlow
             ? text("英文辅助 · 拆解理解 2/4", "English support · Unpack 2/4")
             : text("不会题学习 · 基础讲解 1/3", "Review learning · Foundation 1/3")
         persistLearningFlow()
-        session.learningMetadata.needsReviewFlow.learningFocus = nil
         send(action: .guidedLearning, question: foundationPrompt(for: gap))
     }
 
     func requestAlternativeFoundation() {
         learningLoadingAction = .alternativeExplanation
+        session.learningMetadata.needsReviewFlow.learningFocus = nil
         learningFeedback = text("正在换一种方式讲解…", "Trying another explanation…")
+        persistLearningFlow()
         send(action: .guidedLearning, question: alternativeExplanationPrompt())
     }
 
     func reportFoundationStillUnclear() {
         learningLoadingAction = .prerequisiteExplanation
+        session.learningMetadata.needsReviewFlow.learningFocus = nil
         learningFeedback = text("正在降低一个难度层级…", "Stepping back to a prerequisite…")
+        persistLearningFlow()
         send(action: .guidedLearning, question: text(
             "我还是不懂。不要只换措辞，请判断缺失的前置知识并退回一个难度层级，用一个最小例子重新教。不要给原题答案。结尾重新输出 LEARNING_FOCUS 协议。",
             "I still do not understand. Do not merely rephrase; identify the missing prerequisite, step back one level, and reteach with one minimal example. Do not reveal the original answer. Re-emit LEARNING_FOCUS."
@@ -112,18 +118,20 @@ extension TutorViewModel {
     }
 
     func startMicroCheck() {
-        guard session.learningMetadata.needsReviewFlow.learningFocus != nil else {
-            learningFeedback = text("还没有确认教学焦点，请先重新生成或换一种讲解。", "No learning focus was confirmed. Regenerate or request another explanation first.")
-            errorMessage = text("教学焦点缺失，暂时不能生成微型检查。", "Learning focus is missing; quick check is unavailable.")
-            return
+        let usesRecoveredContext = session.learningMetadata.needsReviewFlow.learningFocus == nil
+        if usesRecoveredContext {
+            session.learningMetadata.needsReviewFlow.learningFocus = recoveredLearningFocus()
         }
+        errorMessage = nil
         learningLoadingAction = .microCheck
         session.learningMetadata.needsReviewFlow.stage = .microCheck
         session.learningMetadata.needsReviewFlow.microCheck = nil
         let isEnglishFlow = session.learningMetadata.needsReviewFlow.gap == .englishReading
         learningFeedback = isEnglishFlow
             ? text("英文辅助 · 含义检查 3/4", "English support · Meaning check 3/4")
-            : text("不会题学习 · 微型检查 2/3", "Review learning · Quick check 2/3")
+            : usesRecoveredContext
+                ? text("正在根据刚才的讲解补建教学焦点并生成检查题…", "Recovering the teaching focus from the explanation and generating a check…")
+                : text("不会题学习 · 微型检查 2/3", "Review learning · Quick check 2/3")
         persistLearningFlow()
         send(action: .guidedLearning, question: text(
             isEnglishFlow
@@ -153,6 +161,7 @@ extension TutorViewModel {
         } else {
             learningLoadingAction = .alternativeExplanation
             session.learningMetadata.needsReviewFlow.stage = .foundation
+            session.learningMetadata.needsReviewFlow.learningFocus = nil
             learningFeedback = text("这一步还没掌握，我会针对这个错误再讲一次。", "This step needs more work. Let's reteach the exact error.")
             send(action: .guidedLearning, question: text("我在教学检查中选择了 \(choice)，正确答案是 \(check.correctAnswer)。只纠正这个理解错误，再给一个更简单的例子；不要讨论原题答案。", "I chose \(choice) in the learning check; the correct answer is \(check.correctAnswer). Correct only this misunderstanding with a simpler example; do not discuss the original answer."))
         }
@@ -183,14 +192,6 @@ extension TutorViewModel {
             task = text("假设我已经知道概念，只示范如何从题干识别触发信号并选择第一步；不要重复定义。", "Assume I know the concept. Show how to recognize the trigger and choose the first step; do not repeat definitions.")
         case .explanationStillUnclear:
             task = text("不要复述上一份解析。改用更简单的表示方式，只解释最可能断裂的一步。", "Do not repeat the prior explanation. Use a simpler representation and reteach only the likely broken step.")
-        case .mathConcept:
-            task = text("只解释本题需要的一个数学概念或公式：每个量代表什么、何时使用，并给一个最小数值例子。", "Teach only the one concept or formula needed: define each quantity, when to use it, and one minimal numeric example.")
-        case .mathModeling:
-            task = text("不要计算答案。把文字条件逐条映射成变量、等式或不等式，只完成建模。", "Do not calculate the answer. Map each condition to variables, equations, or inequalities and stop after modeling.")
-        case .mathExecution:
-            task = text("从学生最可能卡住的那一步开始，只示范下一步运算并解释为什么，避免一次写完整解答。", "Start at the likely stuck step and demonstrate only the next operation with its reason, not the full solution.")
-        case .mathRepresentation:
-            task = text("只解释图、表或函数表示中的坐标、变化和关键特征，不求最终答案。", "Explain only the coordinates, change, and key features in the graph, table, or function; do not solve for the final answer.")
         case .aiDiagnose:
             task = text("先根据对话判断我卡在语言、题意、概念还是应用，然后只教授最可能的一个缺口，并明确说明诊断。", "Diagnose whether the blocker is language, task meaning, concept, or application, then teach only the most likely gap and state the diagnosis.")
         }
@@ -216,27 +217,6 @@ extension TutorViewModel {
         text(
             "围绕同一个教学焦点换一种表示方式：优先使用更短句、对比例子或步骤图式。不要扩大范围，不要给原题答案。结尾重新输出 LEARNING_FOCUS 协议。",
             "Reteach the same focus using shorter language, a contrast example, or a step pattern. Do not broaden scope or reveal the original answer. Re-emit the LEARNING_FOCUS protocol."
-        )
-    }
-
-    private func learningFocusContext() -> String {
-        guard let focus = session.learningMetadata.needsReviewFlow.learningFocus else {
-            return text("刚才讲解的唯一知识点或英文片段", "the single point or English segment just taught")
-        }
-        return "Type: \(focus.type)\nText: \(focus.text)\nObjective: \(focus.objective)"
-    }
-
-    private func learningFocusProtocolInstruction() -> String {
-        text(
-            "回复最后必须输出且只输出一次：\nLEARNING_FOCUS\nType: vocabulary、sentence、task、concept、application 之一\nText: 本次唯一焦点，必须单行\nObjective: 学生下一步应能做到什么，必须单行\nEND_LEARNING_FOCUS",
-            "End with exactly one block:\nLEARNING_FOCUS\nType: one of vocabulary, sentence, task, concept, application\nText: the single focus on one line\nObjective: what the student should do next on one line\nEND_LEARNING_FOCUS"
-        )
-    }
-
-    private func microCheckProtocolInstruction() -> String {
-        text(
-            "回复最后必须逐行输出以下协议，不得使用代码块、项目符号或加粗：\nMICRO_CHECK\nQuestion: 题目\nA. 选项\nB. 选项\nC. 选项\nD. 选项\nAnswer: 正确字母\nEND_MICRO_CHECK",
-            "End with the exact MICRO_CHECK protocol using Question, A/B/C/D, Answer, and END_MICRO_CHECK lines; no code fence, bullets, or bold."
         )
     }
 
@@ -294,9 +274,13 @@ extension TutorViewModel {
     }
 
     func setErrorReason(_ reason: SATErrorReason) {
+        let needsReviewSchedule = session.studyStatus != .mistake
+            || session.learningMetadata.nextReviewAt == nil
         session.learningMetadata.errorReason = reason
         session.studyStatus = .mistake
-        SATReviewScheduler.apply(status: .mistake, to: &session.learningMetadata)
+        if needsReviewSchedule {
+            SATReviewScheduler.apply(status: .mistake, to: &session.learningMetadata)
+        }
         session.updatedAt = Date()
         objectWillChange.send()
         saveLearningState(errorMessage: text("错因保存失败。", "Failed to save the error reason."))
@@ -308,22 +292,58 @@ extension TutorViewModel {
 
     func selectAnswer(_ answer: String) {
         let result = TutorSessionMutation.selectAnswer(answer, in: session)
-        if session.learningMetadata.needsReviewFlow.stage == .pendingVerification {
-            switch result {
-            case .correct:
-                learningFeedback = text("基础题已通过。现在挑战原难度，或按计划稍后验证。", "Easy practice passed. Try the original difficulty now or verify later.")
-            case .incorrect:
-                session.studyStatus = .needsReview
-                session.learningMetadata.needsReviewFlow.stage = .foundation
-                learningFeedback = text("简单题还未通过，先回到基础讲解。", "The easier question was not passed. Return to the foundation step.")
-            case .selected:
-                break
-            case .locked:
-                break
-            }
-        }
+        applyGuidedAnswerResult(result)
         objectWillChange.send()
         saveLearningState(errorMessage: text("答案状态保存失败。", "Failed to save answer state."))
+    }
+
+    private func applyGuidedAnswerResult(_ result: TutorSessionMutation.AnswerSelectionResult) {
+        let flow = session.learningMetadata.needsReviewFlow
+        if flow.stage == .originalQuestion {
+            applyOriginalQuestionResult(result)
+            return
+        }
+        guard flow.stage == .pendingVerification else { return }
+        let role = flow.questionChain.last?.role
+        switch (role, result) {
+        case (.verification, .correct):
+            session.learningMetadata.needsReviewFlow.stage = .scheduled
+            learningFeedback = text("原难度验证通过，系统会按掌握状态安排下一次抽查。", "Original-difficulty verification passed. The next check will follow your mastery state.")
+        case (.verification, .incorrect):
+            returnToFoundationAfterFailedPractice(
+                text("原难度验证还未通过，先针对这个卡点再巩固。", "Verification was not passed. Reinforce this gap before trying again.")
+            )
+        case (.easyPractice, .correct):
+            learningFeedback = text("基础题已通过。现在挑战原难度，或按计划稍后验证。", "Easy practice passed. Try the original difficulty now or verify later.")
+        case (.easyPractice, .incorrect):
+            returnToFoundationAfterFailedPractice(
+                text("简单题还未通过，先回到基础讲解。", "The easier question was not passed. Return to the foundation step.")
+            )
+        default:
+            break
+        }
+    }
+
+    private func applyOriginalQuestionResult(_ result: TutorSessionMutation.AnswerSelectionResult) {
+        switch result {
+        case .correct:
+            session.learningMetadata.needsReviewFlow.stage = .pendingVerification
+            learningFeedback = text("原题已做对；由于使用过英文辅助，稍后再用一道独立题验证。", "Original question passed. Because English support was used, verify independently with another question.")
+        case .incorrect:
+            session.studyStatus = .needsReview
+            session.learningMetadata.needsReviewFlow.gap = .application
+            session.learningMetadata.needsReviewFlow.stage = .planReady
+            learningFeedback = text("英文障碍已排除；现在针对解题应用补基础。", "The English barrier is resolved. Now work on applying the SAT skill.")
+        case .selected, .locked:
+            break
+        }
+    }
+
+    private func returnToFoundationAfterFailedPractice(_ feedback: String) {
+        session.studyStatus = .needsReview
+        session.learningMetadata.needsReviewFlow.stage = .foundation
+        session.learningMetadata.needsReviewFlow.learningFocus = nil
+        learningFeedback = feedback
     }
 
     func startAnswerRetry() {
@@ -345,54 +365,44 @@ extension TutorViewModel {
         saveLearningState(errorMessage: text("正确答案保存失败。", "Failed to save the corrected answer."))
     }
 
-    func updateSATSection(_ section: SATSection) {
-        session.learningMetadata.section = section
-        persistClassification()
-    }
-
-    func updateSATDomain(_ domain: String) {
-        session.learningMetadata.domain = domain
-        persistClassification()
-    }
-
-    func updateSATSkill(_ skill: String) {
-        session.learningMetadata.skill = skill
-        persistClassification()
-    }
-
-    func updateSATDifficulty(_ difficulty: SATDifficulty) {
-        session.learningMetadata.difficulty = difficulty
-        persistClassification()
-    }
-
     func startImmediateVerification() {
         learningLoadingAction = .verification
         let originalDifficulty = session.learningMetadata.needsReviewFlow.originalDifficulty
-        if originalDifficulty != .unknown {
-            session.learningMetadata.difficulty = originalDifficulty
-        }
-        generatePracticeQuestion()
+        let targetDifficulty = originalDifficulty == .unknown
+            ? session.learningMetadata.difficulty
+            : originalDifficulty
+        generatePracticeQuestion(
+            teachingPurposeOverride: .verification,
+            difficultyOverride: targetDifficulty
+        )
     }
 
     func startFoundationPractice() {
         learningLoadingAction = .easyPractice
-        session.learningMetadata.difficulty = .easy
         session.learningMetadata.needsReviewFlow.stage = .easyPractice
-        generatePracticeQuestion()
+        generatePracticeQuestion(
+            teachingPurposeOverride: .guidedRecovery,
+            difficultyOverride: .easy
+        )
     }
 
     func startMistakeVariant() {
         generatePracticeQuestion()
     }
 
-    private func persistClassification() {
-        session.updatedAt = Date()
-        objectWillChange.send()
-        saveLearningState(errorMessage: text("SAT 分类保存失败。", "Failed to save SAT classification."))
-    }
-
-    private func saveLearningState(errorMessage: String) {
-        historyStore.save(session: session, enabled: settingsStore.settings.historyEnabled) { [weak self] success in
+    func saveLearningState(errorMessage: String) {
+        masteryEvidenceStore?.record(
+            session: session,
+            enabled: settingsStore.settings.learningProgressEnabled
+        ) { [weak self] success in
+            guard let self, !success else { return }
+            self.errorMessage = errorMessage
+        }
+        historyStore.save(
+            session: session,
+            detailedHistoryEnabled: settingsStore.settings.historyEnabled,
+            learningProgressEnabled: settingsStore.settings.learningProgressEnabled
+        ) { [weak self] success in
             guard let self, !success else { return }
             self.errorMessage = errorMessage
         }

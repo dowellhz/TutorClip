@@ -75,6 +75,7 @@ final class ConfigLoader: ObservableObject {
     private func writeFileConfig(_ config: FileConfig) throws {
         let directory = configURL.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(config)

@@ -27,7 +27,9 @@ fi
 require_pass "Runtime identity" "^Runtime=bundle=.*/TutorClip\\.app .*signing=.*team=T84BKD53ZD"
 require_pass "Screen Recording" "^(屏幕录制|Screen Recording)=PASS\\b"
 require_pass "Capture Probe" "^(实际截屏|Capture Probe)=PASS\\b"
-require_pass "Global Shortcut" "^(全局快捷键|Global Shortcut)=PASS .*Shift \\+ Command \\+ O"
+# Runtime diagnostics report the user's active configurable shortcut. The default
+# Shift-Command-O contract is pinned separately by shortcut policy unit tests.
+require_pass "Global Shortcut" "^(全局快捷键|Global Shortcut)=PASS\\b"
 require_pass "Screenshot Persistence" "^(截图持久化|Screenshot Persistence)=PASS\\b"
 
 echo "Runtime diagnostics verification passed."

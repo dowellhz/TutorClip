@@ -3,30 +3,85 @@ import SwiftUI
 
 @MainActor
 final class AppCoordinator: ObservableObject {
-    let settingsStore = SettingsStore()
-    let configLoader = ConfigLoader()
-    let historyStore = HistoryStore()
-    let ocrService = OCRService()
-    let promptBuilder = PromptBuilder()
+    let settingsStore: SettingsStore
+    let configLoader: ConfigLoader
+    let historyStore: HistoryStore
+    let masteryEvidenceStore: MasteryEvidenceStore
+    let ocrService: OCRService
+    let promptBuilder: PromptBuilder
     private let ocrRequestLifecycle = OCRRequestLifecycle()
+    let teachingScheduler: TeachingScheduler
 
     private var menuBarController: MenuBarController?
     private var shortcutManager: ShortcutManager?
     private var captureController: CaptureOverlayController?
-    private var tutorWindowController: TutorWindowController?
+    var tutorWindowController: TutorWindowController?
+    private var tutorWindowControllerID: UUID?
     private var settingsWindowController: SettingsWindowController?
     private var onboardingWindowController: OnboardingWindowController?
-    private var historyWindowController: HistoryWindowController?
-    private var knowledgeMapWindowController: KnowledgeMapWindowController?
     private var launchMarkerTimer: Timer?
-    private var didHandleCommandLineDemo = false
+    var didHandleCommandLineDemo = false
     private var captureHiddenWindows: [NSWindow] = []
     private var captureGeneration = CaptureGenerationTracker()
-    private var pendingReviewSessions: [TutorSession] = []
+    var pendingReviewSessions: [TutorSession] = []
+
+    init() {
+        #if DEBUG
+        let testDirectory = ProcessInfo.processInfo.environment["TUTORCLIP_UI_TEST_DIRECTORY"].map {
+            URL(fileURLWithPath: $0, isDirectory: true)
+        }
+        #else
+        let testDirectory: URL? = nil
+        #endif
+        settingsStore = SettingsStore(baseDirectory: testDirectory)
+        configLoader = ConfigLoader()
+        historyStore = HistoryStore(baseDirectory: testDirectory)
+        masteryEvidenceStore = MasteryEvidenceStore(baseDirectory: testDirectory)
+        ocrService = OCRService()
+        promptBuilder = PromptBuilder()
+        teachingScheduler = TeachingScheduler()
+        #if DEBUG
+        if isUITesting {
+            settingsStore.update { $0.hasCompletedOnboarding = true }
+        }
+        #endif
+    }
 
     func start() {
+        #if DEBUG
+        RuntimeLog.write("coordinator-start uiTesting=\(isUITesting) testDirectory=\(ProcessInfo.processInfo.environment["TUTORCLIP_UI_TEST_DIRECTORY"] ?? "nil")")
+        #else
         RuntimeLog.write("coordinator-start")
-        historyStore.open()
+        #endif
+        masteryEvidenceStore.open { [weak self] in
+            self?.historyStore.open { [weak self] in
+                #if DEBUG
+                if let self, self.isUITesting {
+                    let session = DemoSessionFactory.makeUITest()
+                    RuntimeLog.write("ui-test-fixture-open chars=\(session.ocrDocument.editedText.count) answers=\(TutorQuestionParsing.answerChoices(from: session.ocrDocument.editedText).joined())")
+                    self.masteryEvidenceStore.record(session: session, enabled: true)
+                    self.openTutorWindow(session: session)
+                    return
+                }
+                #endif
+                guard let self, self.settingsStore.settings.hasCompletedOnboarding,
+                      !CommandLine.arguments.contains("--demo-session"), self.tutorWindowController == nil else { return }
+                let legacy = self.historyStore.sessions
+                if self.masteryEvidenceStore.evidence.isEmpty,
+                   self.settingsStore.settings.learningProgressEnabled,
+                   !legacy.isEmpty {
+                    var remaining = legacy.count
+                    for session in legacy {
+                        self.masteryEvidenceStore.record(session: session, enabled: true) { [weak self] _ in
+                            remaining -= 1
+                            if remaining == 0 { self?.startTodayPractice() }
+                        }
+                    }
+                    return
+                }
+                self.startTodayPractice()
+            }
+        }
         menuBarController = MenuBarController(coordinator: self)
         shortcutManager = ShortcutManager(settings: settingsStore.settings) { [weak self] in
             Task { @MainActor in self?.beginCapture() }
@@ -42,15 +97,25 @@ final class AppCoordinator: ObservableObject {
         }
     }
 
+    #if DEBUG
+    private var isUITesting: Bool {
+        ProcessInfo.processInfo.environment["TUTORCLIP_UI_TEST"] == "1"
+    }
+    #endif
+
     func shutdown() {
         RuntimeLog.write("coordinator-shutdown")
+        tutorWindowController?.persistBeforeAppTermination()
         ocrRequestLifecycle.cancel(reason: "app-shutdown")
         captureController?.cancel()
         captureController = nil
         captureGeneration.invalidate()
         launchMarkerTimer?.invalidate()
         shortcutManager?.unregister()
-        historyStore.close()
+        // App termination must not return while queued privacy-safe text and
+        // learning writes are still pending, or macOS may end the process first.
+        historyStore.closeAndWait()
+        masteryEvidenceStore.closeAndWait()
     }
 
     func beginCapture() {
@@ -64,7 +129,7 @@ final class AppCoordinator: ObservableObject {
         captureController?.cancel()
         let captureID = captureGeneration.start()
         hideAppWindowsForCapture()
-        captureController = CaptureOverlayController { [weak self] result in
+        captureController = CaptureOverlayController(appLanguage: settingsStore.settings.appLanguage) { [weak self] result in
             guard let self else { return }
             guard self.captureGeneration.accept(captureID) else {
                 RuntimeLog.write("capture-result-stale")
@@ -103,7 +168,7 @@ final class AppCoordinator: ObservableObject {
             return await ocrService.recognize(image: image, language: language)
         } onResult: { [weak self, weak session] document in
             guard let self, let session else { return }
-            RuntimeLog.write("ocr-finished lines=\(document.lines.count)")
+            RuntimeLog.write("ocr-finished lines=\(document.lines.count) appActive=\(NSApp.isActive)")
             session.ocrDocument = document
             session.title = SessionTitle.make(from: document.editedText)
             session.category = SessionCategory.infer(from: document.editedText)
@@ -114,31 +179,86 @@ final class AppCoordinator: ObservableObject {
 
     func openTutorWindow(session: TutorSession, isLoadingOCR: Bool = false, near selectionRect: CGRect? = nil) {
         ocrRequestLifecycle.cancel(reason: "tutor-session-opened")
-        tutorWindowController?.close()
+        if let tutorWindowController {
+            tutorWindowController.updateSession(session, isLoadingOCR: isLoadingOCR)
+            tutorWindowController.show()
+            return
+        }
         let client = DeepSeekClient(configLoader: configLoader, settingsStore: settingsStore)
         let viewModel = TutorViewModel(
             session: session,
             isLoadingOCR: isLoadingOCR,
             settingsStore: settingsStore,
             historyStore: historyStore,
+            masteryEvidenceStore: masteryEvidenceStore,
             deepSeekClient: client,
             promptBuilder: promptBuilder,
             onRecapture: { [weak self] in self?.beginCapture() },
             onSettings: { [weak self] in self?.showSettings() },
             onKnowledgeMap: { [weak self] in self?.showKnowledgeMap() },
+            onNextQuestion: { [weak self] in self?.openNextAdaptiveQuestion() },
             onClose: { [weak self] in self?.tutorWindowController?.close() }
         )
-        tutorWindowController = TutorWindowController(viewModel: viewModel) { [weak self] in
-            self?.ocrRequestLifecycle.cancel(reason: "tutor-window-closed")
-            self?.tutorWindowController = nil
-            self?.openNextReviewSession()
+        let historyViewModel = HistoryViewModel(
+            settingsStore: settingsStore,
+            historyStore: historyStore,
+            masteryEvidenceStore: masteryEvidenceStore,
+            onOpen: { [weak self] session in self?.openTutorWindow(session: session) },
+            onPracticeSkill: { [weak self] profile in self?.startSkillPractice(profile) },
+            onPracticeKnowledgePoint: { [weak self] profile in self?.startKnowledgePointPractice(profile) },
+            onStartReview: { [weak self] sessions, limit in self?.startReviewQueue(sessions, limit: limit) }
+        )
+        let controllerID = UUID()
+        tutorWindowControllerID = controllerID
+        tutorWindowController = TutorWindowController(
+            viewModel: viewModel,
+            historyViewModel: historyViewModel,
+            onStartToday: { [weak self] in self?.startTodayPractice() },
+            onStartChallenge: { [weak self] in self?.startChallengePractice() },
+            onCapture: { [weak self] in self?.beginCapture() },
+            onSettings: { [weak self] in self?.showSettings() }
+        ) { [weak self] in
+            guard let self, self.tutorWindowControllerID == controllerID else {
+                RuntimeLog.write("stale-tutor-window-close-ignored")
+                return
+            }
+            self.ocrRequestLifecycle.cancel(reason: "tutor-window-closed")
+            self.tutorWindowController = nil
+            self.tutorWindowControllerID = nil
+            self.openNextReviewSession()
         }
         tutorWindowController?.show(near: selectionRect)
     }
 
+    private func openNextAdaptiveQuestion() {
+        #if DEBUG
+        if isUITesting {
+            openTutorWindow(session: DemoSessionFactory.makeUITestNext())
+            return
+        }
+        #endif
+        startTodayPractice(respectsDailyLimit: false)
+    }
+
+    func detachAndCloseTutorWindow() {
+        guard let controller = tutorWindowController else { return }
+        ocrRequestLifecycle.cancel(reason: "tutor-window-detached")
+        tutorWindowControllerID = nil
+        tutorWindowController = nil
+        controller.close()
+    }
+
+    func showMainWindow() {
+        if let tutorWindowController {
+            tutorWindowController.show()
+        } else {
+            startTodayPractice()
+        }
+    }
+
     func showSettings() {
         settingsWindowController?.close()
-        let viewModel = SettingsViewModel(settingsStore: settingsStore, configLoader: configLoader, historyStore: historyStore) { [weak self] in
+        let viewModel = SettingsViewModel(settingsStore: settingsStore, configLoader: configLoader, historyStore: historyStore, masteryEvidenceStore: masteryEvidenceStore) { [weak self] in
             self?.shortcutManager?.unregister()
             self?.shortcutManager = ShortcutManager(settings: self?.settingsStore.settings ?? AppSettings()) { [weak self] in
                 Task { @MainActor in self?.beginCapture() }
@@ -146,36 +266,48 @@ final class AppCoordinator: ObservableObject {
             self?.settingsStore.shortcutRegistrationResult = self?.shortcutManager?.register() ?? .unregistered
             self?.menuBarController?.refresh()
         }
-        settingsWindowController = SettingsWindowController(
+        weak var createdController: SettingsWindowController?
+        let controller = SettingsWindowController(
             viewModel: viewModel,
             onRestartOnboarding: { [weak self] in
                 self?.settingsWindowController?.requestClose()
                 self?.showOnboarding()
             },
-            onClose: { [weak self] in self?.settingsWindowController = nil }
+            onClose: { [weak self] in
+                guard let self, self.settingsWindowController === createdController else { return }
+                self.settingsWindowController = nil
+            }
         )
-        settingsWindowController?.show()
+        createdController = controller
+        settingsWindowController = controller
+        controller.show()
     }
 
     func showOnboarding() {
         onboardingWindowController?.close()
         let viewModel = makeSettingsViewModel()
-        onboardingWindowController = OnboardingWindowController(
+        weak var createdController: OnboardingWindowController?
+        let controller = OnboardingWindowController(
             viewModel: viewModel,
             onFinish: { [weak self] in
-                self?.onboardingWindowController?.close()
-                self?.onboardingWindowController = nil
-                self?.menuBarController?.refresh()
+                guard let self, self.onboardingWindowController === createdController else { return }
+                createdController?.close()
+                self.onboardingWindowController = nil
+                self.menuBarController?.refresh()
+                self.startTodayPractice()
             },
             onWindowClosed: { [weak self] in
-                self?.onboardingWindowController = nil
+                guard let self, self.onboardingWindowController === createdController else { return }
+                self.onboardingWindowController = nil
             }
         )
-        onboardingWindowController?.show()
+        createdController = controller
+        onboardingWindowController = controller
+        controller.show()
     }
 
     private func makeSettingsViewModel() -> SettingsViewModel {
-        SettingsViewModel(settingsStore: settingsStore, configLoader: configLoader, historyStore: historyStore) { [weak self] in
+        SettingsViewModel(settingsStore: settingsStore, configLoader: configLoader, historyStore: historyStore, masteryEvidenceStore: masteryEvidenceStore) { [weak self] in
             self?.shortcutManager?.unregister()
             self?.shortcutManager = ShortcutManager(settings: self?.settingsStore.settings ?? AppSettings()) { [weak self] in
                 Task { @MainActor in self?.beginCapture() }
@@ -186,77 +318,20 @@ final class AppCoordinator: ObservableObject {
     }
 
     func showHistory() {
-        historyWindowController?.close()
-        let viewModel = HistoryViewModel(settingsStore: settingsStore, historyStore: historyStore) { [weak self] session in
-            self?.pendingReviewSessions = []
-            self?.openTutorWindow(session: session)
-        } onPracticeSkill: { [weak self] profile in
-            self?.startSkillPractice(profile)
-        } onStartReview: { [weak self] sessions, limit in
-            self?.startReviewQueue(sessions, limit: limit)
-        }
-        historyWindowController = HistoryWindowController(viewModel: viewModel)
-        historyWindowController?.show()
+        ensureWorkspaceWindow()
+        tutorWindowController?.showHistory()
     }
 
     func showKnowledgeMap() {
-        knowledgeMapWindowController?.close()
-        let viewModel = HistoryViewModel(settingsStore: settingsStore, historyStore: historyStore, onOpen: { _ in }, onPracticeKnowledgePoint: { [weak self] profile in
-            self?.startKnowledgePointPractice(profile)
-        })
-        knowledgeMapWindowController = KnowledgeMapWindowController(viewModel: viewModel)
-        knowledgeMapWindowController?.show()
+        ensureWorkspaceWindow()
+        tutorWindowController?.showKnowledgeMap()
     }
 
-    private func startKnowledgePointPractice(_ profile: SATKnowledgePointProfile) {
-        guard let type = SATKnowledgeCatalog.questionType(id: profile.definition.questionTypeID) else { return }
-        pendingReviewSessions = []
-        let difficulty: SATDifficulty = profile.state == .pendingVerification ? .medium : .easy
-        let target = "SAT targeted example. Question type: \(type.titleEN). Knowledge point: \(profile.definition.titleEN) [\(profile.id)]. Difficulty: \(difficulty.rawValue)."
-        var document = OCRDocument.empty()
-        document.fullText = target
-        document.editedText = target
+    private func ensureWorkspaceWindow() {
+        guard tutorWindowController == nil else { return }
         let session = TutorSession.newSession(screenshot: nil)
-        session.ocrDocument = document
-        session.title = profile.definition.titleZH
-        session.category = type.domain == "Standard English Conventions" ? .grammar : .reading
-        session.learningMetadata.section = .readingWriting
-        session.learningMetadata.domain = type.domain
-        session.learningMetadata.skill = type.skill
-        session.learningMetadata.questionTypeID = type.id
-        session.learningMetadata.knowledgePointIDs = [profile.id]
-        session.learningMetadata.difficulty = difficulty
+        session.title = "TutorClip"
         openTutorWindow(session: session)
-        tutorWindowController?.generatePracticeQuestion()
-    }
-
-    private func startSkillPractice(_ profile: SATSkillProfile) {
-        pendingReviewSessions = []
-        var document = OCRDocument.empty()
-        let target = "SAT targeted practice. Section: \(profile.section.rawValue). Domain: \(profile.domain). Skill: \(profile.skill). Difficulty: \(profile.recommendedDifficulty.rawValue)."
-        document.fullText = target
-        document.editedText = target
-        let session = TutorSession.newSession(screenshot: nil)
-        session.ocrDocument = document
-        session.title = profile.skill
-        session.category = profile.section == .math ? .math : .reading
-        session.learningMetadata.section = profile.section
-        session.learningMetadata.domain = profile.domain
-        session.learningMetadata.skill = profile.skill
-        session.learningMetadata.difficulty = profile.recommendedDifficulty
-        openTutorWindow(session: session)
-        tutorWindowController?.generatePracticeQuestion()
-    }
-
-    private func startReviewQueue(_ sessions: [TutorSession], limit: Int) {
-        tutorWindowController?.close()
-        pendingReviewSessions = Array(sessions.prefix(limit))
-        openNextReviewSession()
-    }
-
-    private func openNextReviewSession() {
-        guard !pendingReviewSessions.isEmpty else { return }
-        openTutorWindow(session: pendingReviewSessions.removeFirst())
     }
 
     func recentSessions(limit: Int) -> [TutorSession] {
@@ -271,28 +346,6 @@ final class AppCoordinator: ObservableObject {
         guard settingsStore.shortcutRegistrationResult.isRegistered else {
             settingsStore.shortcutRegistrationResult = shortcutManager?.register() ?? .unregistered
             return
-        }
-    }
-
-    private func requestPermissionsFromApp() {
-        _ = PermissionService.requestScreenCapturePermission()
-        PermissionService.requestAccessibilityPermission()
-        PermissionService.openPrivacySettings()
-        showSettings()
-    }
-
-    private func writeDiagnosticsFromApp() {
-        let config = configLoader.currentConfig(settings: settingsStore.settings)
-        let settings = settingsStore.settings
-        let shortcut = settingsStore.shortcutRegistrationResult
-        Task {
-            let items = await DiagnosticsService.runWithCaptureProbe(settings: settings, shortcut: shortcut, config: config)
-            let lines = ["Runtime=\(RuntimeLog.runtimeIdentity())"] + items.map { "\($0.title)=\($0.state.rawValue) \($0.detail)" }
-            let directory = FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent(".tutorclip", isDirectory: true)
-            let file = directory.appendingPathComponent("diagnostics.txt")
-            try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            try? lines.joined(separator: "\n").write(to: file, atomically: true, encoding: .utf8)
         }
     }
 
@@ -340,29 +393,6 @@ final class AppCoordinator: ObservableObject {
         }
     }
 
-    private func handleLaunchMarkers() {
-        if consumeLaunchMarker(named: "request-permissions") {
-            requestPermissionsFromApp()
-        }
-        if consumeLaunchMarker(named: "write-diagnostics") {
-            writeDiagnosticsFromApp()
-        }
-        let hasCommandLineDemo = CommandLine.arguments.contains("--demo-session")
-        let shouldOpenCommandLineDemo = hasCommandLineDemo && !didHandleCommandLineDemo
-        didHandleCommandLineDemo = didHandleCommandLineDemo || hasCommandLineDemo
-        if shouldOpenCommandLineDemo || consumeLaunchMarker(named: "launch-demo") {
-            openTutorWindow(session: DemoSessionFactory.make())
-        }
-    }
-
-    private func consumeLaunchMarker(named name: String) -> Bool {
-        let marker = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".tutorclip", isDirectory: true)
-            .appendingPathComponent(name)
-        guard FileManager.default.fileExists(atPath: marker.path) else { return false }
-        try? FileManager.default.removeItem(at: marker)
-        return true
-    }
 }
 
 struct CaptureGenerationTracker {

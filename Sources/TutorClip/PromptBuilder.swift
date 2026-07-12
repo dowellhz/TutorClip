@@ -46,7 +46,7 @@ struct PromptBuilder {
         5. 为什么其他选项不对：逐项排除。每个选项必须独立成段，格式为“选项 A：错误。陷阱：... 理由：...”；不要把多个选项写在同一段里。
 
         如果是 SAT Reading/Writing，优先讲题目逻辑、同义转述、句间关系、词汇或语法点；基础词不要解释。
-        如果是 SAT Math，按已知条件、考点、步骤、易错点、最终答案讲。
+        TutorClip 不支持 SAT Math；如果上下文是数学题，只说明不支持，不得解题。
         如果用户只是追问某一点，只回答用户问题，不要自动翻译、总结或展开整题。
         如果 OCR 文本明显缺失、混乱或无法判断，请直接说明不确定之处，不要编造题目内容。
         STRUCTURED_TABLE_n 块是 Apple Vision 按单元格输出的制表符分隔表格，行列关系优先于普通 OCR 行。若表格块缺失、为空或数据与题干冲突，必须说明无法可靠读取表格，禁止猜测数值。
@@ -55,7 +55,7 @@ struct PromptBuilder {
 
     private var englishSystemPrompt: String {
         """
-        You are an experienced SAT tutor. Your goal is to help the student understand the question, reason through the answer choices, and learn the relevant reading, writing, vocabulary, grammar, or math concept.
+        You are an experienced SAT Reading and Writing tutor. Help the student understand reading, writing, vocabulary, and grammar questions.
 
         Answer in English by default. Keep explanations concise, use standard Markdown, and avoid decorative dividers, code blocks, and tables. Markdown markers must always have real content.
 
@@ -66,7 +66,7 @@ struct PromptBuilder {
         4. Why the correct choice is right: connect the choice to the source text.
         5. Why the other choices are wrong: eliminate each choice in its own paragraph using "Choice A: Wrong. Trap: ... Reason: ..."; do not combine multiple choices into one paragraph.
 
-        For SAT Reading/Writing, prioritize question logic, paraphrase, sentence relationships, vocabulary, and grammar that affect the answer. For SAT Math, explain given information, tested concept, steps, traps, and final answer. If OCR is incomplete or ambiguous, say what is uncertain and do not invent missing content.
+        Prioritize question logic, paraphrase, sentence relationships, vocabulary, and grammar that affect the answer. TutorClip does not support SAT Math; if the context is mathematical, state that it is unsupported and do not solve it. If OCR is incomplete or ambiguous, say what is uncertain and do not invent missing content.
         STRUCTURED_TABLE_n blocks are tab-separated cell data produced by Apple Vision. Treat their row-column structure as authoritative over plain OCR lines. If a table block is missing, empty, or conflicts with the prompt, state that the table cannot be read reliably and never guess values.
         """
     }
@@ -105,7 +105,7 @@ struct PromptBuilder {
     }
 
     func formatOCRPrompt(document: OCRDocument) -> [DeepSeekMessage] {
-        let structure = formattingStructureSummary(for: document)
+        let structure = formattingStructureSummary(for: document, includeTokenLayout: true)
         return [
             DeepSeekMessage(
                 role: "system",
@@ -154,6 +154,8 @@ struct PromptBuilder {
                 - 结构化单元格的行列关系是权威的；如果单元格文字明显截断，只能用 OCR 普通行中实际出现的对应字符补全，不能凭常识猜字或数值。
                 - 表格前后必须各有空白行。不要把 STRUCTURED_TABLE_n、END_STRUCTURED_TABLE_n 协议标记输出到 FORMATTED_QUESTION。
                 - 只能调整空格、换行、空白行和段落。
+                - SAT 题中供 A/B/C/D 填入的长横线是作答空格，包括语法填空和 “Which choice ... completes the text?” 逻辑补全题。作答空格必须统一输出为 `_____`，不能变成破折号、句号或直接消失。只有原文确实存在的破折号才能保留为 `—`；作答空格是符号保真规则的窄例外。
+                - TutorClip 暂不支持数学题。如果内容涉及方程、代数、几何或其他数学公式，只需将 Type 标记为 math；禁止猜测、修复或补全公式字符。
                 - 正文段落内不要保留 OCR 扫描产生的硬换行；同一个自然段应连续成一段，让 Markdown 自动换行。
                 - 用 Markdown 段落排版：文章段落、题干、每个选项之间用一个空白行隔开。
                 - 如果原文包含 "notes:" 后接多个 "•" 项目符号，每个 "•" 必须单独成行或单独成段；不要把多个 "•" 项目压在同一段。
@@ -307,7 +309,7 @@ struct PromptBuilder {
         case .formatOCR:
             return "请只整理 OCR 文本排版，不要增加、删除或修改任何非空白字符。"
         case .checkOCR:
-            return "请检查 OCR 文本是否像一道完整 SAT 题，指出缺失、乱码、选项不完整或数学符号错误的地方。"
+            return "请检查 OCR 文本是否像一道完整 SAT 阅读与写作题，指出缺失、乱码或选项不完整的地方。"
         case .translateSelection:
             return hasSelection ? formattedTranslationInstruction(scope: "用户选中的文本", language: language) : formattedTranslationInstruction(scope: "OCR 全文", language: language)
         case .explainSelection:
@@ -346,7 +348,7 @@ struct PromptBuilder {
         case .formatOCR:
             return "Only format the OCR text. Do not add, delete, or change any non-whitespace characters."
         case .checkOCR:
-            return "Check whether the OCR text looks like a complete SAT question. Point out missing text, garbled text, incomplete choices, or math-symbol issues."
+            return "Check whether the OCR text looks like a complete SAT Reading and Writing question. Point out missing text, garbled text, or incomplete choices."
         case .translateSelection:
             return hasSelection ? formattedTranslationInstruction(scope: "the selected text", language: .english) : formattedTranslationInstruction(scope: "the full OCR text", language: .english)
         case .explainSelection:

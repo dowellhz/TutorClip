@@ -38,6 +38,7 @@ actor OCRImageProcessor {
     func prepare(_ image: CGImage) -> CGImage {
         image.upscaledForOCR()
     }
+
 }
 
 private enum OCRVisualStyleDetector {
@@ -71,6 +72,14 @@ private enum OCRVisualStyleDetector {
                 height: image.height
             )
         }
+        let rawDetectedCount = document.tokens.filter { $0.isLikelyUnderlined == true }.count
+        let acceptedIDs = Set(OCRVisualCuePolicy.acceptedUnderlinedTokens(in: document).map(\.id))
+        for index in document.tokens.indices where !acceptedIDs.contains(document.tokens[index].id) {
+            document.tokens[index].isLikelyUnderlined = false
+        }
+        if rawDetectedCount != acceptedIDs.count {
+            RuntimeLog.write("ocr-underline-detection-filtered detected=\(rawDetectedCount) accepted=\(acceptedIDs.count) total=\(document.tokens.count)")
+        }
     }
 
     private static func hasUnderline(box: CGRect, pixels: [UInt8], width: Int, height: Int) -> Bool {
@@ -97,6 +106,56 @@ private enum OCRVisualStyleDetector {
     }
 }
 
+enum OCRVisualCuePolicy {
+    static func acceptedUnderlinedTokens(in document: OCRDocument) -> [OCRToken] {
+        let tableRegions = document.structuredTables.map { $0.boundingBox.cgRect }
+        let inferredTableTitleRegions = tableRegions.map { table in
+            CGRect(
+                x: 0,
+                y: table.maxY,
+                width: 1,
+                height: min(0.15, max(0, 1 - table.maxY))
+            )
+        }
+        let regions = tableRegions
+            + inferredTableTitleRegions
+            + [document.documentTitle?.boundingBox.cgRect].compactMap { $0 }
+        let candidates = document.tokens.filter { token in
+            token.isLikelyUnderlined == true
+                && !regions.contains { substantiallyContains(token.boundingBox.cgRect, region: $0) }
+        }
+        guard !shouldSuppressUnderlineDetection(
+            detectedCount: candidates.count,
+            totalCount: document.tokens.count
+        ) else { return [] }
+        return candidates
+    }
+
+    static func shouldSuppressUnderlineDetection(detectedCount: Int, totalCount: Int) -> Bool {
+        guard totalCount > 0, detectedCount >= 6 else { return false }
+        return Double(detectedCount) / Double(totalCount) >= 0.35
+    }
+
+    static func substantiallyContains(_ token: CGRect, region: CGRect) -> Bool {
+        guard token.width > 0, token.height > 0 else { return false }
+        let overlap = token.intersection(region)
+        guard !overlap.isNull, !overlap.isEmpty else { return false }
+        return overlap.width * overlap.height >= token.width * token.height * 0.5
+    }
+
+    static func occursUniquely(_ text: String, in source: String) -> Bool {
+        guard !text.isEmpty else { return false }
+        let source = source as NSString
+        let options: NSString.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
+        let whole = NSRange(location: 0, length: source.length)
+        let first = source.range(of: text, options: options, range: whole)
+        guard first.location != NSNotFound else { return false }
+        let next = first.location + first.length
+        let remaining = NSRange(location: next, length: source.length - next)
+        return source.range(of: text, options: options, range: remaining).location == NSNotFound
+    }
+}
+
 private extension NSImage {
     func sourceCGImageForOCR() -> CGImage? {
         if let best = representations
@@ -110,12 +169,11 @@ private extension NSImage {
 }
 
 private extension CGImage {
-    func upscaledForOCR() -> CGImage {
-        let targetWidth = 2400
+    func upscaledForOCR(targetWidth: Int = 2400, maximumScale: Int = 3) -> CGImage {
         guard width > 0, height > 0 else { return paddedForOCR() }
         guard width < targetWidth else { return paddedForOCR() }
 
-        let scale = min(3, max(1, targetWidth / width))
+        let scale = min(maximumScale, max(1, targetWidth / width))
         guard scale > 1 else { return paddedForOCR() }
 
         let scaledWidth = width * scale

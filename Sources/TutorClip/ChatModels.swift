@@ -61,6 +61,14 @@ struct AnswerSummary: Equatable {
     }
 }
 
+enum VocabularyLearningState: String, Codable, CaseIterable {
+    case new, learning, mastered
+}
+
+enum VocabularyReviewRating {
+    case unknown, unsure, known
+}
+
 struct VocabularyCard: Codable, Equatable, Identifiable {
     var id: UUID
     var term: String
@@ -68,6 +76,87 @@ struct VocabularyCard: Codable, Equatable, Identifiable {
     var note: String
     var example: String?
     var source: String
+    var sourceSessionID: UUID? = nil
+    var learningState: VocabularyLearningState = .new
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
+    var nextReviewAt: Date = Date()
+    var lastReviewedAt: Date? = nil
+    var reviewCount: Int = 0
+    var correctStreak: Int = 0
+    var lapseCount: Int = 0
+
+    init(
+        id: UUID, term: String, meaning: String, note: String, example: String?, source: String,
+        sourceSessionID: UUID? = nil, learningState: VocabularyLearningState = .new,
+        createdAt: Date = Date(), updatedAt: Date = Date(), nextReviewAt: Date = Date(),
+        lastReviewedAt: Date? = nil, reviewCount: Int = 0, correctStreak: Int = 0, lapseCount: Int = 0
+    ) {
+        self.id = id
+        self.term = term
+        self.meaning = meaning
+        self.note = note
+        self.example = example
+        self.source = source
+        self.sourceSessionID = sourceSessionID
+        self.learningState = learningState
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.nextReviewAt = nextReviewAt
+        self.lastReviewedAt = lastReviewedAt
+        self.reviewCount = reviewCount
+        self.correctStreak = correctStreak
+        self.lapseCount = lapseCount
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, term, meaning, note, example, source, sourceSessionID, learningState
+        case createdAt, updatedAt, nextReviewAt, lastReviewedAt, reviewCount, correctStreak, lapseCount
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        let now = Date()
+        id = try values.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        term = try values.decode(String.self, forKey: .term)
+        meaning = try values.decodeIfPresent(String.self, forKey: .meaning) ?? ""
+        note = try values.decodeIfPresent(String.self, forKey: .note) ?? ""
+        example = try values.decodeIfPresent(String.self, forKey: .example)
+        source = try values.decodeIfPresent(String.self, forKey: .source) ?? ""
+        sourceSessionID = try values.decodeIfPresent(UUID.self, forKey: .sourceSessionID)
+        learningState = try values.decodeIfPresent(VocabularyLearningState.self, forKey: .learningState) ?? .new
+        createdAt = try values.decodeIfPresent(Date.self, forKey: .createdAt) ?? now
+        updatedAt = try values.decodeIfPresent(Date.self, forKey: .updatedAt) ?? createdAt
+        nextReviewAt = try values.decodeIfPresent(Date.self, forKey: .nextReviewAt) ?? now
+        lastReviewedAt = try values.decodeIfPresent(Date.self, forKey: .lastReviewedAt)
+        reviewCount = try values.decodeIfPresent(Int.self, forKey: .reviewCount) ?? 0
+        correctStreak = try values.decodeIfPresent(Int.self, forKey: .correctStreak) ?? 0
+        lapseCount = try values.decodeIfPresent(Int.self, forKey: .lapseCount) ?? 0
+    }
+
+    var isDue: Bool { nextReviewAt <= Date() }
+
+    mutating func applyReview(_ rating: VocabularyReviewRating, now: Date = Date()) {
+        reviewCount += 1
+        lastReviewedAt = now
+        updatedAt = now
+        switch rating {
+        case .unknown:
+            lapseCount += 1
+            correctStreak = 0
+            learningState = .learning
+            nextReviewAt = now.addingTimeInterval(10 * 60)
+        case .unsure:
+            correctStreak = 0
+            learningState = .learning
+            nextReviewAt = now.addingTimeInterval(24 * 60 * 60)
+        case .known:
+            correctStreak += 1
+            learningState = correctStreak >= 2 || reviewCount == 1 ? .mastered : .learning
+            let days = reviewCount == 1 ? 7 : min(60, 7 * (correctStreak + 1))
+            nextReviewAt = now.addingTimeInterval(Double(days) * 24 * 60 * 60)
+        }
+    }
 
     static func extract(from content: String) -> (cards: [VocabularyCard], body: String) {
         guard let start = content.range(of: "VOCAB_CARDS"),

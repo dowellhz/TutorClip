@@ -190,7 +190,8 @@ struct StudyStatusControl: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 Picker("", selection: Binding(get: { viewModel.session.learningMetadata.section }, set: viewModel.updateSATSection)) {
-                    ForEach(SATSection.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    Text(SATSection.readingWriting.rawValue).tag(SATSection.readingWriting)
+                    Text(SATSection.unknown.rawValue).tag(SATSection.unknown)
                 }
                 .frame(width: 150)
                 Picker("", selection: Binding(get: { viewModel.session.learningMetadata.difficulty }, set: viewModel.updateSATDifficulty)) {
@@ -225,11 +226,13 @@ struct StudyStatusControl: View {
                 viewModel.setStudyStatus(status)
             }
             .buttonStyle(PrimaryCapsuleButtonStyle())
+            .accessibilityIdentifier("studyStatus.\(status.rawValue)")
         } else {
             Button(status.title(language: viewModel.language)) {
                 viewModel.setStudyStatus(status)
             }
             .buttonStyle(ChromeButtonStyle())
+            .accessibilityIdentifier("studyStatus.\(status.rawValue)")
         }
     }
 }
@@ -270,12 +273,14 @@ struct AnswerChoiceControl: View {
             }
             .buttonStyle(PrimaryCapsuleButtonStyle())
             .disabled(!viewModel.session.learningMetadata.answerSubmissionOpen)
+            .accessibilityIdentifier("answer.\(choice)")
         } else {
             Button(choice) {
                 viewModel.selectAnswer(choice)
             }
             .buttonStyle(ChromeButtonStyle())
             .disabled(!viewModel.session.learningMetadata.answerSubmissionOpen)
+            .accessibilityIdentifier("answer.\(choice)")
         }
     }
 
@@ -287,23 +292,33 @@ struct AnswerChoiceControl: View {
                 Text(viewModel.text("正确", "Correct"))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Color.teal)
-            case .incorrect(_, let correct):
-                Text(viewModel.text("错误，答案 \(correct)", "Incorrect, answer \(correct)"))
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.orange)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .accessibilityIdentifier("answer.result.correct")
+            case .incorrect:
+                HStack(spacing: 8) {
+                    Text(viewModel.text("错误", "Incorrect"))
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.orange)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .accessibilityIdentifier("answer.result.incorrect")
+                    if !viewModel.session.learningMetadata.answerSubmissionOpen,
+                       viewModel.session.learningMetadata.answerAttemptNumber == 1 {
+                        Button(viewModel.text("再试一次", "Try Again")) { viewModel.startAnswerRetry() }
+                            .buttonStyle(ChromeButtonStyle())
+                            .accessibilityIdentifier("answer.retry")
+                    }
+                }
             case .selected(let selected):
                 Text(viewModel.text("已选择 \(selected)", "Selected \(selected)"))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
             case .locked(let selected):
                 Text(viewModel.text("首次答案已锁定：\(selected)", "First answer locked: \(selected)"))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.secondary)
-            }
-            if !viewModel.session.learningMetadata.answerSubmissionOpen,
-               viewModel.session.learningMetadata.answerAttemptNumber == 1 {
-                Button(viewModel.text("再试一次", "Try Again")) { viewModel.startAnswerRetry() }
-                    .buttonStyle(ChromeButtonStyle())
             }
         }
     }
@@ -312,6 +327,7 @@ struct AnswerChoiceControl: View {
 struct ChromeButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
+            .focusEffectDisabled()
             .font(.system(size: 13, weight: .medium))
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
@@ -330,6 +346,7 @@ struct ChromeButtonStyle: ButtonStyle {
 struct PrimaryCapsuleButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
+            .focusEffectDisabled()
             .font(.system(size: 13, weight: .semibold))
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)

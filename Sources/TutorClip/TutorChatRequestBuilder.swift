@@ -55,9 +55,14 @@ struct TutorChatRequestBuilder {
             contextDocumentID: session.ocrDocument.id
         )
 
-        let systemPrompt = action == .guidedLearning
-            ? promptBuilder.guidedLearningSystemPrompt(language: language)
-            : promptBuilder.systemPrompt(language: language)
+        let systemPrompt: String
+        if action == .guidedLearning {
+            systemPrompt = promptBuilder.guidedLearningSystemPrompt(language: language)
+        } else if action == .customQuestion {
+            systemPrompt = promptBuilder.customQuestionSystemPrompt(language: language)
+        } else {
+            systemPrompt = promptBuilder.systemPrompt(language: language)
+        }
         var deepSeekMessages = [DeepSeekMessage(role: "system", content: systemPrompt)]
         let currentContextMessages = session.messages.filter {
             ($0.contextDocumentID == nil || $0.contextDocumentID == session.ocrDocument.id)

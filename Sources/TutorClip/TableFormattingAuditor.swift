@@ -67,9 +67,41 @@ struct TableFormattingAuditor {
                   result.columnCount == expected.columns
                       && result.rows.count >= expected.dataRows
                       && result.rows.allSatisfy { $0.count == expected.columns }
-              }) else { return false }
+              }),
+              TableCellIntegrityValidator.preserves(document.structuredTables, in: resultTables)
+        else { return false }
         let sourceChoices = Set(TutorQuestionParsing.answerChoices(from: document.editedText))
         let resultChoices = Set(TutorQuestionParsing.answerChoices(from: repaired))
         return !sourceChoices.isEmpty && sourceChoices.isSubset(of: resultChoices)
+    }
+}
+
+enum TableCellIntegrityValidator {
+    static func preserves(_ sourceTables: [OCRTable], in renderedTables: [QuestionMarkdownTable]) -> Bool {
+        guard sourceTables.count == renderedTables.count else { return false }
+        return zip(sourceTables, renderedTables).allSatisfy(preserves)
+    }
+
+    private static func preserves(_ source: OCRTable, _ rendered: QuestionMarkdownTable) -> Bool {
+        let renderedRows = [rendered.header] + rendered.rows
+        return source.rows.allSatisfy { sourceRow in
+            sourceRow.allSatisfy { cell in
+                guard renderedRows.indices.contains(cell.rowStart),
+                      cell.columnStart <= cell.columnEnd,
+                      renderedRows[cell.rowStart].indices.contains(cell.columnStart),
+                      renderedRows[cell.rowStart].indices.contains(cell.columnEnd)
+                else { return false }
+                let renderedText = renderedRows[cell.rowStart][cell.columnStart...cell.columnEnd]
+                    .joined(separator: " ")
+                return normalize(renderedText).contains(normalize(cell.text))
+            }
+        }
+    }
+
+    private static func normalize(_ text: String) -> String {
+        text.unicodeScalars
+            .filter { CharacterSet.alphanumerics.contains($0) }
+            .map { Character(String($0)).lowercased() }
+            .joined()
     }
 }

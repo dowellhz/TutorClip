@@ -60,10 +60,6 @@ enum DiagnosticCLI {
             runLanguagePolicyProbe()
             return true
         }
-        if CommandLine.arguments.contains("--probe-latex-display") {
-            runLatexDisplayProbe()
-            return true
-        }
         if CommandLine.arguments.contains("--probe-selection-ui-policy") {
             DiagnosticUIProbe.runSelectionUIPolicyProbe()
             return true

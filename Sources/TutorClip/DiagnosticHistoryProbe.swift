@@ -38,26 +38,31 @@ enum DiagnosticHistoryProbe {
         let loaded = store.sessions.first
         store.close()
 
-        let preserved = loaded?.ocrDocument.editedText == session.ocrDocument.editedText
+        let detailsPreserved = loaded?.ocrDocument.editedText == session.ocrDocument.editedText
             && loaded?.messages.first?.content == session.messages.first?.content
             && loaded?.messages.first?.role == session.messages.first?.role
             && loaded?.messages.first?.actionType == session.messages.first?.actionType
-            && loaded?.selectedAnswer == "C"
-            && loaded?.correctAnswer == "B"
-            && loaded?.vocabularyCards == session.vocabularyCards
-            && loaded?.studyStatus == .mistake
+        let learningExcluded = loaded?.selectedAnswer == nil
+            && loaded?.correctAnswer == nil
+            && loaded?.vocabularyCards.isEmpty == true
+            && loaded?.studyStatus == .unreviewed
         let screenshotDiscarded = loaded?.screenshotInMemory == nil
 
         print("historySaved=\(saved)")
-        print("historyLearningMetadataPreserved=\(preserved)")
+        print("historyDetailsPreserved=\(detailsPreserved)")
+        print("historyLearningMetadataExcluded=\(learningExcluded)")
         print("historyScreenshotDiscarded=\(screenshotDiscarded)")
-        return saved && preserved && screenshotDiscarded
+        return saved && detailsPreserved && learningExcluded && screenshotDiscarded
     }
 
     @MainActor
     private static func save(session: TutorSession, in store: HistoryStore) async -> Bool {
         await withCheckedContinuation { continuation in
-            store.save(session: session, enabled: true) { success in
+            store.save(
+                session: session,
+                detailedHistoryEnabled: true,
+                learningProgressEnabled: false
+            ) { success in
                 continuation.resume(returning: success)
             }
         }

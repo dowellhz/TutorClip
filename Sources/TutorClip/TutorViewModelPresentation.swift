@@ -6,12 +6,18 @@ extension TutorViewModel {
         viewedQuestionSnapshot?.text ?? session.ocrDocument.editedText
     }
 
+    var isViewingQuestionSnapshot: Bool { viewedQuestionSnapshot != nil }
+
     var underlinedOCRTexts: [String] {
-        session.ocrDocument.tokens.filter { $0.isLikelyUnderlined == true }.map(\.text)
+        OCRVisualCuePolicy.acceptedUnderlinedTokens(in: session.ocrDocument)
+            .map(\.text)
+            .filter { OCRVisualCuePolicy.occursUniquely($0, in: session.ocrDocument.editedText) }
     }
 
     func viewQuestionSnapshot(_ snapshot: SATQuestionSnapshot?) {
         viewedQuestionSnapshot = snapshot
+        selectedText = ""
+        selectedTextRect = nil
     }
     var answerEvidence: String { answerSummary?.evidence ?? "" }
 
@@ -22,7 +28,9 @@ extension TutorViewModel {
     var answerSelectionResult: TutorSessionMutation.AnswerSelectionResult? {
         TutorSessionMutation.answerSelectionResult(
             selected: session.selectedAnswer,
-            correct: session.correctAnswer ?? answerSummary?.choiceLetter
+            correct: session.learningMetadata.canAutoGradeAnswer
+                ? (session.correctAnswer ?? answerSummary?.choiceLetter)
+                : nil
         )
     }
 

@@ -13,6 +13,10 @@ struct OCRDocument: Codable, Equatable {
     var tables: [OCRTable]? = nil
     var documentTitle: OCRDocumentTitle? = nil
     var paragraphs: [OCRParagraph]? = nil
+    var alternateText: String? = nil
+    var alternateTokens: [OCRToken]? = nil
+    var recognitionCandidates: [String]? = nil
+    var alternateRecognitionCandidates: [String]? = nil
 
     static func empty() -> OCRDocument {
         OCRDocument(id: UUID(), fullText: "", editedText: "", detectedLanguage: nil, createdAt: Date(), blocks: [], lines: [], tokens: [], tables: [])

@@ -40,11 +40,6 @@ enum MissingChoiceFallback {
     }
 
     private static func choiceLabel(atStartOf line: String) -> String? {
-        let text = line.trimmingCharacters(in: .whitespaces)
-        guard let first = text.first else { return nil }
-        let label = String(first).uppercased()
-        guard ["A", "B", "C", "D"].contains(label), text.count > 1 else { return nil }
-        let delimiter = text[text.index(after: text.startIndex)]
-        return delimiter == ")" || delimiter == "." || delimiter == ":" || delimiter.isWhitespace ? label : nil
+        TutorQuestionParsing.answerChoiceLabel(atStartOf: line)
     }
 }

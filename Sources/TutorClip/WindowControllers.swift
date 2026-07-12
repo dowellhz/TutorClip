@@ -4,31 +4,44 @@ import SwiftUI
 @MainActor
 final class TutorWindowController: NSWindowController {
     private let viewModel: TutorViewModel
+    private let router = MainWorkspaceRouter()
     private let onWindowClosed: () -> Void
 
-    init(viewModel: TutorViewModel, onWindowClosed: @escaping () -> Void = {}) {
+    init(
+        viewModel: TutorViewModel,
+        historyViewModel: HistoryViewModel,
+        onStartToday: @escaping () -> Void,
+        onStartChallenge: @escaping () -> Void,
+        onCapture: @escaping () -> Void,
+        onSettings: @escaping () -> Void,
+        onWindowClosed: @escaping () -> Void = {}
+    ) {
         self.viewModel = viewModel
         self.onWindowClosed = onWindowClosed
-        let content = TutorWindowView(viewModel: viewModel)
-        let window = TutorPanel(
+        let content = MainWorkspaceView(
+            tutorViewModel: viewModel,
+            historyViewModel: historyViewModel,
+            router: router,
+            onStartToday: onStartToday,
+            onStartChallenge: onStartChallenge,
+            onCapture: onCapture,
+            onSettings: onSettings
+        )
+        let window = TutorMainWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1080, height: 720),
-            styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.title = "TutorClip"
-        window.titleVisibility = .hidden
-        window.titlebarAppearsTransparent = true
-        window.isMovableByWindowBackground = true
-        window.isOpaque = false
-        window.backgroundColor = .clear
+        window.titleVisibility = .visible
+        window.titlebarAppearsTransparent = false
+        window.isMovableByWindowBackground = false
+        window.isOpaque = true
+        window.backgroundColor = .windowBackgroundColor
         window.hasShadow = true
-        window.level = .floating
-        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient, .ignoresCycle]
-        window.hidesOnDeactivate = false
-        window.standardWindowButton(.closeButton)?.isHidden = true
-        window.standardWindowButton(.miniaturizeButton)?.isHidden = true
-        window.standardWindowButton(.zoomButton)?.isHidden = true
+        window.level = .normal
+        window.collectionBehavior = [.managed, .participatesInCycle]
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: content)
         super.init(window: window)
@@ -40,17 +53,31 @@ final class TutorWindowController: NSWindowController {
     }
 
     func show(near selectionRect: CGRect? = nil) {
-        if let selectionRect {
-            positionWindow(near: selectionRect)
-        } else {
+        if window?.isVisible != true {
             window?.center()
         }
-        window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        window?.makeKeyAndOrderFront(nil)
+        // One-time fronting is required after capture. The normal window level
+        // still lets any subsequently selected app cover TutorClip.
+        window?.orderFrontRegardless()
+        RuntimeLog.write("tutor-window-fronted level=normal")
     }
 
     func updateSession(_ session: TutorSession, isLoadingOCR: Bool) {
+        viewModel.persistBeforeReplacingSession(with: session.id)
         viewModel.replaceSession(session, isLoadingOCR: isLoadingOCR)
+        router.route = .question
+    }
+
+    func showHistory() { router.route = .history; show() }
+    func showKnowledgeMap() { router.route = .knowledge; show() }
+    func showToday() { router.route = .today; show() }
+
+    func showDailyPracticeComplete() {
+        viewModel.isDailyPracticeComplete = true
+        router.route = .today
+        show()
     }
 
     func formatOCR() {
@@ -59,6 +86,10 @@ final class TutorWindowController: NSWindowController {
 
     func generatePracticeQuestion() {
         viewModel.generatePracticeQuestion()
+    }
+
+    func persistBeforeAppTermination() {
+        viewModel.closeAndPersistIfNeeded()
     }
 
     private func positionWindow(near selectionRect: CGRect) {
@@ -160,10 +191,7 @@ extension TutorWindowController: NSWindowDelegate {
     }
 }
 
-private final class TutorPanel: NSPanel {
-    override var canBecomeKey: Bool { true }
-    override var canBecomeMain: Bool { true }
-
+private final class TutorMainWindow: NSWindow {
     override func keyDown(with event: NSEvent) {
         if WindowKeyboardPolicy.shouldClose(modifierFlags: event.modifierFlags, keyCode: event.keyCode) {
             performClose(nil)
@@ -250,18 +278,15 @@ final class SettingsWindowController: NSWindowController {
             defer: false
         )
         window.title = "TutorClip Help & Settings"
-        window.titleVisibility = .hidden
-        window.titlebarAppearsTransparent = true
-        window.isMovableByWindowBackground = true
-        window.isOpaque = false
-        window.backgroundColor = .clear
+        window.titleVisibility = .visible
+        window.titlebarAppearsTransparent = false
+        window.isMovableByWindowBackground = false
+        window.isOpaque = true
+        window.backgroundColor = .windowBackgroundColor
         window.hasShadow = true
-        window.level = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue + 1)
-        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        window.hidesOnDeactivate = false
-        window.standardWindowButton(.closeButton)?.isHidden = true
-        window.standardWindowButton(.miniaturizeButton)?.isHidden = true
-        window.standardWindowButton(.zoomButton)?.isHidden = true
+        window.level = .normal
+        window.collectionBehavior = [.managed, .participatesInCycle]
+        window.isReleasedWhenClosed = false
         super.init(window: window)
         window.delegate = self
         window.contentView = NSHostingView(rootView: SettingsView(
@@ -299,10 +324,7 @@ extension SettingsWindowController: NSWindowDelegate {
     }
 }
 
-private final class SettingsPanel: NSPanel {
-    override var canBecomeKey: Bool { true }
-    override var canBecomeMain: Bool { true }
-
+private final class SettingsPanel: NSWindow {
     override func keyDown(with event: NSEvent) {
         if WindowKeyboardPolicy.shouldClose(modifierFlags: event.modifierFlags, keyCode: event.keyCode) {
             performClose(nil)
@@ -327,57 +349,5 @@ private final class SettingsPanel: NSPanel {
 enum WindowKeyboardPolicy {
     static func shouldClose(modifierFlags: NSEvent.ModifierFlags, keyCode: UInt16) -> Bool {
         modifierFlags.contains(.command) && keyCode == 13
-    }
-}
-
-@MainActor
-final class HistoryWindowController: NSWindowController {
-    init(viewModel: HistoryViewModel) {
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 760, height: 560),
-            styleMask: [.titled, .closable, .resizable],
-            backing: .buffered,
-            defer: false
-        )
-        window.title = "TutorClip History"
-        window.contentView = NSHostingView(rootView: HistoryView(viewModel: viewModel))
-        super.init(window: window)
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    func show() {
-        window?.center()
-        window?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-    }
-}
-
-@MainActor
-final class KnowledgeMapWindowController: NSWindowController {
-    init(viewModel: HistoryViewModel) {
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 900, height: 620),
-            styleMask: [.titled, .closable, .resizable],
-            backing: .buffered,
-            defer: false
-        )
-        window.title = "TutorClip Knowledge Map"
-        window.level = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue + 1)
-        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        window.hidesOnDeactivate = false
-        window.isReleasedWhenClosed = false
-        window.contentView = NSHostingView(rootView: KnowledgeMapView(viewModel: viewModel))
-        super.init(window: window)
-    }
-
-    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-
-    func show() {
-        window?.center()
-        window?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
     }
 }

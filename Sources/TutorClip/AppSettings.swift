@@ -14,6 +14,7 @@ enum OCRLanguage: String, Codable, CaseIterable, Identifiable {
         case .automatic: return []
         }
     }
+
 }
 
 enum AppLanguage: String, Codable, CaseIterable, Identifiable {
@@ -41,6 +42,7 @@ struct AppSettings: Codable, Equatable {
     var shortcutKeyCode: UInt32 = KeyCodeDisplay.defaultKeyCode
     var shortcutModifiers: UInt32 = KeyCodeDisplay.defaultModifiers
     var historyEnabled: Bool = true
+    var learningProgressEnabled: Bool = true
     var launchAtLogin: Bool = false
     var ocrLanguage: OCRLanguage = .english
     var appLanguage: AppLanguage = .chinese
@@ -56,6 +58,7 @@ struct AppSettings: Codable, Equatable {
         shortcutKeyCode = try values.decodeIfPresent(UInt32.self, forKey: .shortcutKeyCode) ?? shortcutKeyCode
         shortcutModifiers = try values.decodeIfPresent(UInt32.self, forKey: .shortcutModifiers) ?? shortcutModifiers
         historyEnabled = try values.decodeIfPresent(Bool.self, forKey: .historyEnabled) ?? historyEnabled
+        learningProgressEnabled = try values.decodeIfPresent(Bool.self, forKey: .learningProgressEnabled) ?? learningProgressEnabled
         launchAtLogin = try values.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? launchAtLogin
         ocrLanguage = try values.decodeIfPresent(OCRLanguage.self, forKey: .ocrLanguage) ?? ocrLanguage
         appLanguage = try values.decodeIfPresent(AppLanguage.self, forKey: .appLanguage) ?? appLanguage

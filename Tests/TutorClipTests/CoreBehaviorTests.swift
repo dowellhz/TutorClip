@@ -262,112 +262,6 @@ final class CoreBehaviorTests: XCTestCase {
     }
 
     @MainActor
-    func testHistoryClearReportsSuccessAndDatabaseFailure() async throws {
-        let baseURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("tutorclip-history-clear-xctest-\(UUID().uuidString)", isDirectory: true)
-        defer { try? FileManager.default.removeItem(at: baseURL) }
-
-        let workingStore = HistoryStore(baseDirectory: baseURL.appendingPathComponent("working"))
-        workingStore.open()
-        let saveSucceeded = await save(makeSession(), in: workingStore)
-        XCTAssertTrue(saveSucceeded)
-        XCTAssertFalse(workingStore.sessions.isEmpty)
-        let clearSucceeded = await clear(workingStore)
-        XCTAssertTrue(clearSucceeded)
-        XCTAssertTrue(workingStore.sessions.isEmpty)
-        workingStore.close()
-
-        let blockedURL = baseURL.appendingPathComponent("not-a-directory")
-        try FileManager.default.createDirectory(at: baseURL, withIntermediateDirectories: true)
-        try Data("blocked".utf8).write(to: blockedURL)
-        let blockedStore = HistoryStore(baseDirectory: blockedURL)
-        blockedStore.open()
-        let blockedClearSucceeded = await clear(blockedStore)
-        XCTAssertFalse(blockedClearSucceeded)
-        blockedStore.close()
-    }
-
-    @MainActor
-    func testSettingsHistoryClearFailureIsVisibleAndLoadingEnds() async {
-        let baseURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("tutorclip-history-feedback-xctest-\(UUID().uuidString)", isDirectory: true)
-        defer { try? FileManager.default.removeItem(at: baseURL) }
-        let viewModel = SettingsViewModel(
-            settingsStore: SettingsStore(baseDirectory: baseURL.appendingPathComponent("settings")),
-            configLoader: ConfigLoader(),
-            historyStore: HistoryStore(baseDirectory: baseURL.appendingPathComponent("unopened-history")),
-            onShortcutChanged: {}
-        )
-
-        viewModel.clearHistory()
-        for _ in 0..<100 where viewModel.isClearingHistory {
-            await Task.yield()
-        }
-
-        XCTAssertFalse(viewModel.isClearingHistory)
-        XCTAssertTrue(viewModel.historyStatusIsError)
-        XCTAssertFalse(viewModel.historyStatusMessage.isEmpty)
-    }
-
-    @MainActor
-    func testDiagnosticsRejectsCancelledRunAndKeepsLatestResult() async throws {
-        let baseURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("tutorclip-diagnostics-xctest-\(UUID().uuidString)", isDirectory: true)
-        defer { try? FileManager.default.removeItem(at: baseURL) }
-        var invocation = 0
-        let viewModel = SettingsViewModel(
-            settingsStore: SettingsStore(baseDirectory: baseURL.appendingPathComponent("settings")),
-            configLoader: ConfigLoader(),
-            historyStore: HistoryStore(baseDirectory: baseURL.appendingPathComponent("history")),
-            onShortcutChanged: {},
-            diagnosticsRunner: { _, _, _ in
-                invocation += 1
-                let currentInvocation = invocation
-                do {
-                    try await Task.sleep(nanoseconds: currentInvocation == 1 ? 80_000_000 : 5_000_000)
-                } catch {
-                    // Model a system probe that still produces a result after cancellation.
-                }
-                return [DiagnosticItem(title: currentInvocation == 1 ? "stale" : "latest", state: .pass, detail: "synthetic")]
-            }
-        )
-
-        viewModel.runDiagnostics()
-        await Task.yield()
-        viewModel.runDiagnostics()
-        try await Task.sleep(nanoseconds: 120_000_000)
-
-        XCTAssertEqual(invocation, 2)
-        XCTAssertEqual(viewModel.diagnostics.map(\.title), ["latest"])
-        XCTAssertFalse(viewModel.isRunningDiagnostics)
-    }
-
-    @MainActor
-    func testCancellingDiagnosticsEndsLoadingWithoutApplyingResult() async {
-        let baseURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("tutorclip-diagnostics-cancel-xctest-\(UUID().uuidString)", isDirectory: true)
-        defer { try? FileManager.default.removeItem(at: baseURL) }
-        let viewModel = SettingsViewModel(
-            settingsStore: SettingsStore(baseDirectory: baseURL.appendingPathComponent("settings")),
-            configLoader: ConfigLoader(),
-            historyStore: HistoryStore(baseDirectory: baseURL.appendingPathComponent("history")),
-            onShortcutChanged: {},
-            diagnosticsRunner: { _, _, _ in
-                try? await Task.sleep(nanoseconds: 80_000_000)
-                return [DiagnosticItem(title: "late", state: .pass, detail: "synthetic")]
-            }
-        )
-
-        viewModel.runDiagnostics()
-        let runningPlaceholder = viewModel.diagnostics
-        viewModel.cancelDiagnostics()
-        await Task.yield()
-
-        XCTAssertFalse(viewModel.isRunningDiagnostics)
-        XCTAssertEqual(viewModel.diagnostics, runningPlaceholder)
-    }
-
-    @MainActor
     func testReplacingSessionCancelsFormattingAndRejectsStaleResult() async throws {
         let baseURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("tutorclip-request-xctest-\(UUID().uuidString)", isDirectory: true)
@@ -403,53 +297,6 @@ final class CoreBehaviorTests: XCTestCase {
         XCTAssertEqual(viewModel.session.ocrDocument.editedText, "Replacement question")
         XCTAssertFalse(viewModel.isStreaming)
         XCTAssertEqual(viewModel.ocrFormatState, .idle)
-    }
-
-    @MainActor
-    func testSettingsStoreReportsPersistenceSuccessAndFailure() throws {
-        let baseURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("tutorclip-settings-xctest-\(UUID().uuidString)", isDirectory: true)
-        defer { try? FileManager.default.removeItem(at: baseURL) }
-
-        let store = SettingsStore(baseDirectory: baseURL)
-        let saved = store.update { $0.historyEnabled = false }
-        XCTAssertTrue(saved)
-        XCTAssertNil(store.persistenceError)
-        XCTAssertFalse(SettingsStore(baseDirectory: baseURL).settings.historyEnabled)
-
-        let blockedURL = baseURL.appendingPathComponent("not-a-directory")
-        try Data("blocked".utf8).write(to: blockedURL)
-        let blockedStore = SettingsStore(baseDirectory: blockedURL)
-        let original = blockedStore.settings
-        let failed = blockedStore.update { $0.historyEnabled = false }
-        XCTAssertFalse(failed)
-        XCTAssertNotNil(blockedStore.persistenceError)
-        XCTAssertEqual(blockedStore.settings, original)
-    }
-
-    @MainActor
-    func testLaunchAtLoginFailureRollsBackOnlyThatSetting() {
-        let baseURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("tutorclip-launch-xctest-\(UUID().uuidString)", isDirectory: true)
-        defer { try? FileManager.default.removeItem(at: baseURL) }
-        let settingsStore = SettingsStore(baseDirectory: baseURL.appendingPathComponent("settings"))
-        let viewModel = SettingsViewModel(
-            settingsStore: settingsStore,
-            configLoader: ConfigLoader(),
-            historyStore: HistoryStore(baseDirectory: baseURL.appendingPathComponent("history")),
-            onShortcutChanged: {},
-            updateLaunchAtLogin: { _ in throw SyntheticLaunchAtLoginError.failed }
-        )
-        viewModel.settings.historyEnabled = false
-        viewModel.settings.launchAtLogin = true
-
-        viewModel.save()
-
-        XCTAssertFalse(viewModel.settings.launchAtLogin)
-        XCTAssertFalse(settingsStore.settings.launchAtLogin)
-        XCTAssertFalse(settingsStore.settings.historyEnabled)
-        XCTAssertTrue(viewModel.saveStatusIsError)
-        XCTAssertTrue(viewModel.saveStatusMessage.contains("failed"))
     }
 
     @MainActor
@@ -557,12 +404,6 @@ final class CoreBehaviorTests: XCTestCase {
 private enum HistoryMigrationTestError: Error {
     case cannotOpenDatabase
     case cannotCreateLegacySchema
-}
-
-private enum SyntheticLaunchAtLoginError: LocalizedError {
-    case failed
-
-    var errorDescription: String? { "synthetic launch update failed" }
 }
 
 @MainActor

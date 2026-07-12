@@ -4,12 +4,15 @@ These rules define how future coding work on TutorClip should be done.
 
 ## Product Contract
 
-TutorClip is a personal macOS 26+ SAT screenshot tutor.
+TutorClip is a personal macOS 26+ adaptive SAT tutor. Screenshot OCR is a fast
+question-ingestion path, not the application's only entry point.
 
 Required behavior:
 
 - App name is `TutorClip`.
-- The app is a menu bar resident macOS app.
+- The app is a standard macOS app with a Dock presence and a normal main window.
+- The menu bar item remains available as a secondary quick-access surface.
+- Normal launch opens the main window to adaptive daily practice.
 - Default global shortcut is `Shift + Command + O`.
 - Shortcut must remain configurable.
 - The shortcut opens a screenshot selection overlay.
@@ -20,18 +23,25 @@ Required behavior:
 - The AI persona is an experienced SAT tutor.
 - The main UI should feel like Raycast.
 - Text selection actions should feel like PopClip.
+- OCR questions and generated practice use the same main window and learning model.
+- The main window must use normal macOS window ordering and must not remain always on top.
 
 ## Privacy Rules
 
 These are hard requirements.
 
 - Never save screenshots to disk.
-- Screenshots may exist only in memory for the current session.
-- Closing the tutor window must discard the screenshot.
-- History may save OCR text, structured OCR metadata, conversation messages, and learning metadata only.
-- Learning metadata means selected answers, correct answers, study status, and vocabulary cards.
+- Screenshots may exist only in memory for the current active OCR session.
+- Leaving or replacing the OCR session, or closing the main window, must discard its screenshot.
+- TutorClip may automatically send the user-selected screenshot region to a configured remote vision/OCR provider when local OCR cannot reliably recover a Reading and Writing question. This automatic fallback does not require a separate per-capture authorization prompt.
+- Remote image transfer must contain only the region deliberately selected by the user, must use encrypted transport, and must be used only to recover the current question. TutorClip must not send the full screen when the user selected a smaller region.
+- TutorClip must release the remote-request image payload and response-associated image data after the current OCR request finishes, fails, or is cancelled. Remote fallback must respect OCR session identity and cancellation so stale results cannot mutate a replacement session.
+- A remote vision/OCR provider must not be described as local processing. Product UI must disclose that selected screenshots may be sent automatically for recognition when remote fallback is configured.
+- Saved question and conversation history may contain OCR text, structured OCR metadata, and conversation messages only; it must remain independently controllable by the user.
+- Saved learning progress may contain selected answers, correct answers, study status, mastery evidence, review scheduling, and vocabulary cards only; it must remain independently controllable by the user.
+- First-run UI must clearly disclose the separate learning-progress and question/conversation-history controls before either category is persisted.
 - History must not save screenshots or raw screen images.
-- DeepSeek receives text context only unless the user explicitly changes the product design later.
+- DeepSeek receives text context only. Because the official DeepSeek API does not accept image input, screenshot images may be sent only to the separately configured vision/OCR provider; only the resulting text context may be sent to DeepSeek.
 - Do not store the DeepSeek API key in Keychain.
 - Do not hardcode API keys.
 - Do not write API keys into logs, history, SQLite, settings, or source files.
@@ -50,7 +60,8 @@ System stability is a hard requirement.
 - Any behavior that can freeze macOS, monopolize input, block the main thread, trap the user in an overlay, or otherwise make the system feel stuck must be treated as high risk and implemented cautiously.
 - Screenshot capture, global event monitors, window levels, keyboard interception, and permission flows must always have clear cancellation and recovery paths.
 - Long-running work such as OCR, networking, history writes, or image processing must not run synchronously on the main thread.
-- Before changing capture or always-on-top window behavior, consider failure modes where the app cannot receive input, cannot dismiss an overlay, or prevents the user from switching apps.
+- Capture may activate the app once after selection, but OCR completion must not steal focus again.
+- Before changing capture or window activation behavior, consider failure modes where the app cannot receive input, cannot dismiss an overlay, repeatedly steals focus, or prevents the user from switching apps.
 
 ## UI Rules
 
@@ -64,25 +75,59 @@ The interface should be clean, modern, and work-focused.
 - Do not use nested cards.
 - Do not add decorative illustrations.
 - Prioritize OCR readability and tutor response clarity.
-- Keep the floating tutor window always above normal windows.
-- Clicking outside the tutor window should not close it.
-- `Command + W` closes the tutor window.
-- `Esc` cancels screenshot capture, but should not accidentally close the tutor window.
+- The main window, Settings, History, and Knowledge Map use normal macOS window levels.
+- Clicking another app lets TutorClip move behind it normally and must not close TutorClip.
+- `Command + W` closes the main window without quitting the app; the global shortcut remains available.
+- Clicking the Dock icon reopens the main window when no main window is visible.
+- `Command + Q` quits the app.
+- `Esc` cancels screenshot capture, but should not accidentally close the main window.
+- The main window uses standard macOS minimize, zoom, window cycling, and Space behavior.
 
-## Core User Flow
+## Normal Launch Flow
+
+1. User launches TutorClip normally or reopens it from the Dock.
+2. TutorClip opens its main window to Today Practice.
+3. A teaching scheduler selects the most valuable next knowledge point and question purpose from the student's mastery evidence.
+4. DeepSeek generates and validates a structured SAT question, or the UI shows an actionable setup, loading, or recovery state.
+5. User answers and receives immediate, appropriately sized instruction.
+6. The answer records mastery evidence immediately; persistence must not depend on closing the window.
+7. The scheduler chooses whether to advance, verify, reteach, reduce difficulty, increase difficulty, or stop for the day.
+
+## Screenshot Flow
 
 1. User presses `Shift + Command + O`.
 2. TutorClip shows a fullscreen capture overlay.
 3. User selects a region.
 4. TutorClip captures the region in memory.
-5. TutorClip runs local OCR.
-6. TutorClip opens the floating tutor window.
+5. TutorClip restores and activates the normal main window once, switches it to the new OCR session, and shows OCR progress.
+6. TutorClip runs local OCR without blocking the main thread.
 7. Left side shows the current question text by default, with a screenshot tab available.
 8. Right side shows SAT Tutor chat.
 9. User can ask questions or use quick actions.
 10. DeepSeek streams a Chinese explanation.
-11. Closing the window discards the screenshot.
-12. OCR, chat, and learning metadata are saved only if history is enabled.
+11. After that one activation, switching to another app places TutorClip behind it normally; OCR completion must not reactivate TutorClip.
+12. Leaving or replacing the OCR session, or closing the main window, discards the screenshot.
+13. OCR text, chat, and learning progress follow their respective user-controlled persistence settings.
+
+## Adaptive Learning Contract
+
+TutorClip behaves like an experienced SAT teacher, not a uniform random-question feed.
+
+- The teaching scheduler must choose questions using prerequisites, due review, recent OCR mistakes, weak or unverified points, uncovered points, transfer checks, and session pacing.
+- Do not require a fixed number of correct answers for every knowledge point.
+- A simple point may reach initial mastery after one strong independent diagnostic response.
+- Ordinary points should normally require independent evidence across more than one presentation.
+- Complex points should require appropriately varied evidence such as foundation, application, or transfer.
+- Hint-assisted, ambiguous, invalid, or unverified generated questions must not count as independent mastery evidence.
+- Wrong answers must not blindly reset all progress; concept gaps, reading errors, careless mistakes, and language barriers are different evidence.
+- Mastery is staged rather than boolean: unseen, learning, initially mastered, stably mastered, and due for review.
+- When all currently scheduled material is complete, show a clear completion state and optional challenge or free-practice paths; do not create an endless mandatory feed.
+- Stable knowledge remains subject to increasingly infrequent maintenance checks.
+- New users begin with a short broad diagnostic so clearly easy material can be passed quickly.
+
+The knowledge model must extend beyond a flat catalog. It should support prerequisite, easily-confused, composite, and difficulty relationships. TutorClip covers SAT Reading and Writing only and must not claim, generate, teach, or track SAT Math mastery.
+
+Generated practice must use a structured contract containing the target knowledge point, prerequisites, purpose, difficulty, correct answer, distractor misconceptions, and explanation basis. Questions that fail quality or answer validation must not affect mastery.
 
 ## Required Actions
 
@@ -119,13 +164,7 @@ For Reading/Writing:
 - Explain why wrong choices are wrong.
 - Identify vocabulary, grammar, or reasoning points.
 
-For Math:
-
-- Extract given information.
-- Identify the concept tested.
-- Solve step by step.
-- Explain common traps.
-- Give the final answer.
+For Math, state that TutorClip does not support the question. Do not reconstruct formulas, solve it, generate an answer, or create follow-up practice.
 
 If OCR is incomplete or ambiguous, the model should say so and avoid inventing missing content.
 
@@ -147,7 +186,7 @@ When a text task requires language understanding, layout judgment, or SAT domain
 Preferred stack:
 
 - SwiftUI for main app UI.
-- AppKit for menu bar, floating panels, capture overlay, shortcut handling, and native text selection behavior.
+- AppKit for the standard main window, menu bar, capture overlay, shortcut handling, activation behavior, and native text selection behavior.
 - Apple Vision for local OCR.
 - URLSession for DeepSeek streaming.
 - SQLite for history.
@@ -163,6 +202,8 @@ Core modules should stay separated:
 - `OCRRequestLifecycle`
 - `TutorWindowController`
 - `TutorViewModel`
+- `TeachingScheduler`
+- `MasteryEvidenceStore`
 - `DeepSeekClient`
 - `PromptBuilder`
 - `HistoryStore`
@@ -171,7 +212,11 @@ Core modules should stay separated:
 
 Avoid mixing UI code, network code, persistence, OCR, and prompt construction in the same type.
 
-`OCRRequestLifecycle` owns cancellation and session identity checks for in-memory screenshot OCR. Replacing or closing a tutor session must prevent an older OCR result from mutating the current window.
+`OCRRequestLifecycle` owns cancellation and session identity checks for in-memory screenshot OCR. Replacing, leaving, or closing an OCR session must prevent an older OCR result from mutating the current window.
+
+`TeachingScheduler` owns selection of the next learning objective, question purpose, and target difficulty. `AppCoordinator` may request and present that decision but must not implement teaching policy itself.
+
+`MasteryEvidenceStore` owns durable, versioned mastery evidence and vocabulary-card review scheduling separately from question and conversation history. Vocabulary cards may store text context and source session identity, but never screenshots or raw screen images.
 
 ## Code Size And Maintainability Rules
 

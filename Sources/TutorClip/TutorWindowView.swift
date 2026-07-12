@@ -7,7 +7,6 @@ struct TutorWindowView: View {
     @State private var needsReviewDockHeight: CGFloat = 0
     private let chatContentEndID = "chat-content-end"
     private let chatBottomID = "chat-bottom"
-    private let panelCornerRadius: CGFloat = 16
 
     var body: some View {
         VStack(spacing: 0) {
@@ -24,12 +23,12 @@ struct TutorWindowView: View {
             }
         }
         .background(panelBackground)
-        .clipShape(RoundedRectangle(cornerRadius: panelCornerRadius, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: panelCornerRadius, style: .continuous)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-        )
         .frame(minWidth: 900, minHeight: 620)
+        .onChange(of: viewModel.session.id) {
+            sourceTextEditing = false
+            needsReviewDockExpanded = viewModel.session.studyStatus == .needsReview
+            needsReviewDockHeight = 0
+        }
     }
 
     private var panelBackground: some View {
@@ -50,15 +49,14 @@ struct TutorWindowView: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            Text("TutorClip")
+            Text(displayTitle)
                 .font(.system(size: 15, weight: .semibold))
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .help(displayTitle)
             Spacer()
             Button(viewModel.text("知识地图", "Knowledge Map")) {
                 viewModel.showKnowledgeMap()
-            }
-            .buttonStyle(ChromeButtonStyle())
-            Button(viewModel.text("设置", "Settings")) {
-                viewModel.showSettings()
             }
             .buttonStyle(ChromeButtonStyle())
             if viewModel.isLoadingOCR {
@@ -89,6 +87,14 @@ struct TutorWindowView: View {
         .background(Color.primary.opacity(0.015))
     }
 
+    private var displayTitle: String {
+        let question = viewModel.visibleQuestionText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = question.isEmpty || viewModel.isAdaptiveQuestionPlaceholder
+            ? viewModel.session.title
+            : SessionTitle.make(from: question)
+        return title
+    }
+
     private var chatPanel: some View {
         VStack(spacing: 0) {
             HStack {
@@ -100,10 +106,37 @@ struct TutorWindowView: View {
             .frame(height: 46)
             horizontalDivider
 
-            if !viewModel.answerChoices.isEmpty {
+            if !viewModel.isViewingQuestionSnapshot, !viewModel.answerChoices.isEmpty {
                 AnswerChoiceControl(viewModel: viewModel, choices: viewModel.answerChoices)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
+                horizontalDivider
+            }
+            if !viewModel.session.learningMetadata.answerSubmissionOpen,
+               viewModel.session.learningMetadata.isAIGenerated {
+                HStack {
+                    Text(viewModel.text("本题证据已记录，下一题会按当前掌握状态重新选择。", "Evidence recorded; the next question will be selected from current mastery."))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button {
+                        viewModel.continueAdaptivePractice()
+                    } label: {
+                        if viewModel.isAdvancingPractice {
+                            HStack(spacing: 6) {
+                                ProgressView().controlSize(.small)
+                                Text(viewModel.text("正在保存…", "Saving…"))
+                            }
+                        } else {
+                            Text(viewModel.text("下一题", "Next Question"))
+                        }
+                    }
+                    .buttonStyle(PrimaryCapsuleButtonStyle())
+                    .disabled(viewModel.isAdvancingPractice)
+                    .accessibilityIdentifier("adaptive.nextQuestion")
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
                 horizontalDivider
             }
 

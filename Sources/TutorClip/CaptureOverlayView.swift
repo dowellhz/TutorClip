@@ -1,8 +1,8 @@
 import AppKit
 
 final class CaptureOverlayWindow: NSWindow {
-    init(screen: NSScreen, completion: @escaping (CaptureOverlayAction) -> Void) {
-        let content = CaptureOverlayView(screen: screen, completion: completion)
+    init(screen: NSScreen, appLanguage: AppLanguage, completion: @escaping (CaptureOverlayAction) -> Void) {
+        let content = CaptureOverlayView(screen: screen, appLanguage: appLanguage, completion: completion)
         super.init(contentRect: screen.frame, styleMask: [.borderless], backing: .buffered, defer: false)
         isOpaque = false
         backgroundColor = .clear
@@ -26,9 +26,11 @@ final class CaptureOverlayView: NSView {
     private var dragMode: DragMode = .none
     private var dragStartPoint: CGPoint?
     private var dragStartRect: CGRect?
+    private let appLanguage: AppLanguage
 
-    init(screen: NSScreen, completion: @escaping (CaptureOverlayAction) -> Void) {
+    init(screen: NSScreen, appLanguage: AppLanguage, completion: @escaping (CaptureOverlayAction) -> Void) {
         targetScreen = screen
+        self.appLanguage = appLanguage
         self.completion = completion
         super.init(frame: CGRect(origin: .zero, size: screen.frame.size))
         wantsLayer = true
@@ -62,16 +64,26 @@ final class CaptureOverlayView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
+        completion(.interaction)
         let point = convert(event.locationInWindow, from: nil)
         if event.clickCount == 2, finalizedRect != nil {
+            RuntimeLog.write("capture-confirm-trigger double-click")
             confirmSelection()
             return
         }
 
         if let rect = finalizedRect {
             dragMode = hitTestMode(at: point, in: rect)
-            dragStartPoint = point
-            dragStartRect = rect
+            if dragMode == .creating {
+                finalizedRect = nil
+                startPoint = point
+                currentPoint = point
+                dragStartPoint = nil
+                dragStartRect = nil
+            } else {
+                dragStartPoint = point
+                dragStartRect = rect
+            }
         } else {
             dragMode = .creating
             startPoint = point
@@ -95,18 +107,23 @@ final class CaptureOverlayView: NSView {
     }
 
     override func mouseUp(with event: NSEvent) {
+        completion(.interaction)
         if dragMode == .creating {
             currentPoint = convert(event.locationInWindow, from: nil)
             guard let rect = selectionRect, rect.width > 8, rect.height > 8 else {
                 RuntimeLog.write("capture-mouse-up-small-selection")
-                completion(.cancelled)
+                resetSelection()
                 return
             }
             finalizedRect = rect.integral
-            RuntimeLog.write("capture-mouse-up-confirm")
-            confirmSelection()
+            dragMode = .none
+            dragStartPoint = nil
+            dragStartRect = nil
+            RuntimeLog.write("capture-mouse-up-finalized-awaiting-confirmation rect=\(finalizedRect?.debugDescription ?? "nil")")
+            needsDisplay = true
             return
         }
+        RuntimeLog.write("capture-adjust-finished mode=\(String(describing: dragMode)) rect=\(finalizedRect?.debugDescription ?? "nil")")
         dragMode = .none
         dragStartPoint = nil
         dragStartRect = nil
@@ -120,6 +137,7 @@ final class CaptureOverlayView: NSView {
             return
         }
         if event.keyCode == 36 {
+            RuntimeLog.write("capture-confirm-trigger return")
             confirmSelection()
         }
     }
@@ -141,13 +159,23 @@ final class CaptureOverlayView: NSView {
 
     private func confirmSelection() {
         guard let rect = selectionRect, rect.width > 8, rect.height > 8 else {
-            completion(.cancelled)
+            NSSound.beep()
             return
         }
         let paddedRect = paddedSelectionRect(rect).integral
         let globalRect = globalCaptureRect(from: paddedRect).integral
         RuntimeLog.write("capture-confirm rect=\(rect.debugDescription) padded=\(paddedRect.debugDescription) bounds=\(bounds.debugDescription) window=\(window?.frame.debugDescription ?? "nil") global=\(globalRect.debugDescription)")
         completion(.selected(CaptureSelection(globalRect: globalRect, outputSize: paddedRect.size)))
+    }
+
+    private func resetSelection() {
+        startPoint = nil
+        currentPoint = nil
+        finalizedRect = nil
+        dragMode = .none
+        dragStartPoint = nil
+        dragStartRect = nil
+        needsDisplay = true
     }
 
     private func drawHandles(for rect: CGRect) {
@@ -158,7 +186,15 @@ final class CaptureOverlayView: NSView {
     }
 
     private func drawHelpText(near rect: CGRect) {
-        let text = finalizedRect == nil ? "Drag to select" : "Drag edges to adjust - Return to capture - Esc to cancel"
+        let text: String
+        if finalizedRect == nil {
+            text = appLanguage.text("拖动以选择区域", "Drag to select")
+        } else {
+            text = appLanguage.text(
+                "拖动边缘调整 · 回车截图 · Esc 取消",
+                "Drag edges to adjust · Return to capture · Esc to cancel"
+            )
+        }
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 13, weight: .medium),
             .foregroundColor: NSColor.white,
@@ -249,6 +285,7 @@ struct CaptureSelection {
 }
 
 enum CaptureOverlayAction {
+    case interaction
     case cancelled
     case selected(CaptureSelection)
 }

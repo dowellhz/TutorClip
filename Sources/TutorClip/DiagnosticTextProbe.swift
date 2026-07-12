@@ -185,43 +185,6 @@ extension DiagnosticCLI {
         }
     }
 
-    static func runLatexDisplayProbe() {
-        let source = #"The equation \(3x^2 + (9p + q)x + pq = 0\) has solutions x_1 and x_2. The product is m \cdot pq. A) \frac{1}{3} B) \frac{1}{9}"#
-        let escapedSource = #"C) \\frac{x+1}{12} D) \\sqrt{x_2} and m \\times n"#
-        let normalized = LatexDisplayNormalizer.displayString(from: source)
-        let escapedNormalized = LatexDisplayNormalizer.displayString(from: escapedSource)
-        let rendered = SelectableQuestionTextRenderer.attributedString(from: source).string
-        let normalizedLooksMath = normalized.contains("3x²")
-            && normalized.contains("x₁")
-            && normalized.contains("x₂")
-            && normalized.contains("m · pq")
-            && normalized.contains("⅓")
-            && normalized.contains("⅑")
-            && !normalized.contains(#"\frac"#)
-            && !normalized.contains(#"\cdot"#)
-        let escapedLooksMath = escapedNormalized.contains("(x+1)⁄12")
-            && escapedNormalized.contains("√(x₂)")
-            && escapedNormalized.contains("m × n")
-            && !escapedNormalized.contains(#"\frac"#)
-            && !escapedNormalized.contains(#"\sqrt"#)
-        let renderedLooksMath = rendered.contains("3x²")
-            && rendered.contains("x₁")
-            && rendered.contains("x₂")
-            && rendered.contains("m · pq")
-            && rendered.contains("⅓")
-            && rendered.contains("⅑")
-        print("normalized=\(normalized)")
-        print("escapedNormalized=\(escapedNormalized)")
-        print("rendered=\(rendered)")
-        print("normalizedLooksMath=\(normalizedLooksMath)")
-        print("escapedLooksMath=\(escapedLooksMath)")
-        print("renderedLooksMath=\(renderedLooksMath)")
-        if !normalizedLooksMath || !escapedLooksMath || !renderedLooksMath {
-            fputs("LaTeX display probe failed.\n", stderr)
-            exit(2)
-        }
-    }
-
     static func runResponseProcessingProbe() {
         let explainRaw = """
         ANSWER_SUMMARY

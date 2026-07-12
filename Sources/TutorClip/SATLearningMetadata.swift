@@ -4,7 +4,7 @@ enum SATSection: String, Codable, CaseIterable {
     case readingWriting, math, unknown
 }
 
-enum SATMasteryState: String, Codable {
+enum SATMasteryState: String, Codable, Equatable {
     case new, learning, pendingVerification, mastered
 }
 
@@ -82,6 +82,9 @@ struct SATLearningMetadata: Codable, Equatable {
     var questionTypeID = ""
     var knowledgePointIDs: [String] = []
     var difficulty: SATDifficulty = .unknown
+    var teachingPurpose: SATTeachingPurpose?
+    var variationTopic = ""
+    var variationStructure = ""
     var classificationConfidence: Double = 0
     var errorReason: SATErrorReason?
     var attemptCount = 0
@@ -155,6 +158,9 @@ struct SATLearningMetadata: Codable, Equatable {
         questionTypeID = try values.decodeIfPresent(String.self, forKey: .questionTypeID) ?? ""
         knowledgePointIDs = try values.decodeIfPresent([String].self, forKey: .knowledgePointIDs) ?? []
         difficulty = try values.decodeIfPresent(SATDifficulty.self, forKey: .difficulty) ?? .unknown
+        teachingPurpose = try values.decodeIfPresent(SATTeachingPurpose.self, forKey: .teachingPurpose)
+        variationTopic = try values.decodeIfPresent(String.self, forKey: .variationTopic) ?? ""
+        variationStructure = try values.decodeIfPresent(String.self, forKey: .variationStructure) ?? ""
         classificationConfidence = try values.decodeIfPresent(Double.self, forKey: .classificationConfidence) ?? 0
         errorReason = try values.decodeIfPresent(SATErrorReason.self, forKey: .errorReason)
         attemptCount = try values.decodeIfPresent(Int.self, forKey: .attemptCount) ?? 0

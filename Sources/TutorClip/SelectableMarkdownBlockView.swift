@@ -47,13 +47,8 @@ struct SelectableMarkdownBlockView: NSViewRepresentable {
         let attributed = SelectableQuestionTextRenderer.attributedString(from: markdown.isEmpty ? "..." : markdown).mutableCopy() as! NSMutableAttributedString
         let source = attributed.string as NSString
         for text in underlinedTexts where !text.isEmpty {
-            var searchRange = NSRange(location: 0, length: source.length)
-            while searchRange.length > 0 {
-                let found = source.range(of: text, options: [.caseInsensitive, .diacriticInsensitive], range: searchRange)
-                guard found.location != NSNotFound else { break }
+            if let found = UnderlineTextMatcher.uniqueRange(of: text, in: source) {
                 attributed.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: found)
-                let next = found.location + found.length
-                searchRange = NSRange(location: next, length: source.length - next)
             }
         }
         textView.textStorage?.setAttributedString(attributed)

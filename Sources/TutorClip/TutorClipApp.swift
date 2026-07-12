@@ -20,7 +20,7 @@ struct TutorClipApp {
         let app = NSApplication.shared
         let delegate = AppDelegate()
         app.delegate = delegate
-        app.setActivationPolicy(.accessory)
+        app.setActivationPolicy(.regular)
         app.run()
     }
 }
@@ -43,6 +43,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         coordinator?.shutdown()
     }
 
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            coordinator?.showMainWindow()
+        }
+        return true
+    }
+
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
     }
@@ -50,6 +57,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 enum SingleInstanceGuard {
     static func shouldExitCurrentProcess() -> Bool {
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return false }
+        #if DEBUG
+        guard ProcessInfo.processInfo.environment["TUTORCLIP_UI_TEST"] != "1" else { return false }
+        #endif
         guard let bundleIdentifier = Bundle.main.bundleIdentifier else { return false }
         let currentPID = ProcessInfo.processInfo.processIdentifier
         let existingApps = NSRunningApplication

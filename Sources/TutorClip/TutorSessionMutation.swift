@@ -48,6 +48,7 @@ enum TutorSessionMutation {
     static func beginUnscoredRetry(in session: TutorSession) {
         session.learningMetadata.answerAttemptNumber += 1
         session.learningMetadata.answerSubmissionOpen = true
+        session.learningMetadata.currentAttemptStartedAt = Date()
         session.selectedAnswer = nil
         session.updatedAt = Date()
     }

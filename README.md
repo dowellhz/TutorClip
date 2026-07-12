@@ -167,14 +167,15 @@ Example config:
 
 ## Implemented
 
-- Menu bar resident app
+- Standard Dock app with a reusable main window and secondary menu bar access
+- Today Practice, current question, Knowledge Map, History, and Vocabulary in one main-window navigation structure
 - Configurable global shortcut, default `Shift + Command + O`
 - Fullscreen capture overlay
 - Capture rectangle adjustment before confirmation
 - In-memory selected-region screenshot
 - ScreenCaptureKit screenshot capture
 - Local Apple Vision OCR
-- Raycast-style floating tutor window
+- Raycast-style normal tutor window that fronts once after capture and then follows standard macOS ordering
 - Current-session screenshot preview
 - Question tab shown by default with AI-formatted Markdown text
 - Screenshot tab for the current in-memory screenshot preview
@@ -186,20 +187,29 @@ Example config:
 - SAT tutor prompt
 - Quick actions: Recapture, Vocabulary, Analyze Passage, Practice Similar, Translate All, Explain All
 - Selected-text actions: Translate, Vocabulary
-- SQLite history for OCR, conversation, and learning metadata only
+- Vocabulary learning loop with context-specific senses, due review, adaptive Again/Unsure/Known scheduling, search, status filters, editing, deletion, and source-question links
+- Independent controls for detailed question/chat history and abstract learning progress
+- Dedicated `mastery.sqlite` evidence store, separate from detailed session history
 - History search, open, delete, and clear
 - SAT Section, Domain, Skill, difficulty, error-reason, attempt, and review metadata
 - Distinct Got It, Review, and Mistake learning flows with visible next steps
-- Guided Review flow: separate no-answer tutor prompt, reading/math-specific gap diagnosis, persisted learning focus, focus-bound hidden-answer micro check, scaffolded practice, then independent verification; progress resumes from history
+- Guided Review flow: separate no-answer Reading and Writing tutor prompt, persisted learning focus, focus-bound hidden-answer micro check, scaffolded practice, then independent verification; progress resumes from history
 - First-answer locking with unscored retries, answer-confidence protection, and hint-aware 1/3/7/14/30-day scheduling
 - Review question chains preserve the original, easier practice, and verification questions without mixing old chat into new AI context
 - Local underline detection restores likely underlined OCR words in the Question view and sends only structured text cues to DeepSeek
 - Event-based mastery calculation and 1/3/7/14/30-day review scheduling
+- Teacher-style next-question scheduling using due review, errors, coverage, prerequisites, and varied verification
+- Broad eight-answer initial diagnostic followed by targeted recovery, verification, and maintenance decisions
+- Evidence-based mastery: simple points may pass quickly while ordinary and complex points require stronger varied evidence
+- Weighted multi-skill evidence: the primary knowledge point receives full evidence while secondary associations remain diagnostic signals
+- Natural daily stopping points: the initial diagnostic ends after eight valid responses and regular required practice ends after five per day, with optional challenge practice available
+- Versioned Reading and Writing knowledge catalog with prerequisite and confusion relationships
 - Today Review queues with Quick 5 and Review 10 continuous sessions
 - Learning Center workspaces for due review, full history, and skill profiles
 - History filters for status, section, domain, skill, difficulty, error reason, source, and date
 - Skill mastery, accuracy, common-error, recommended-difficulty, reset, and targeted-practice actions
 - AI-generated practice labeling, recent-question diversity, and independent answer/ambiguity validation
+- Structured generated-question teaching contracts with purpose, prerequisites, distractor misconceptions, and verification basis
 - Editable AI SAT classification in the tutor window
 - Settings window
 - Launch-at-login setting
@@ -213,10 +223,12 @@ Example config:
 ## Privacy
 
 - Screenshots are never saved to disk.
-- Closing the tutor window discards the screenshot.
-- History stores OCR text, structured OCR data, conversations, selected/correct answers, vocabulary cards, SAT skill metadata, answer attempts, and review events only.
+- Leaving or replacing an OCR session, or closing the main window, discards its screenshot.
+- Detailed history stores OCR text, structured OCR data, and conversations only when enabled.
+- Learning progress stores selected/correct answers, vocabulary cards, SAT skill metadata, answer attempts, mastery evidence, and review events only when enabled.
+- The local data directory is owner-only (`0700`); settings, history, mastery, and API-key configuration files are owner-only (`0600`). Existing files are tightened when their owning store opens.
 - API keys are not stored in Keychain, history, logs, or source code.
 
 ## Known Gaps
 
-- Full end-to-end verification still needs to be completed with macOS Screen Recording permission granted. Use `VERIFY.md`.
+- Screen Recording and Accessibility are granted on the current verification Mac, and automated app-process capture diagnostics pass. The remaining gap is completing every interactive item in `VERIFY.md`, especially the multi-step guided-learning and History workspace flows.

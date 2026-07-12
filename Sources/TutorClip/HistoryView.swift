@@ -17,16 +17,21 @@ struct HistoryView: View {
             HStack {
                 Picker("", selection: $viewModel.workspace) {
                     ForEach(HistoryViewModel.Workspace.allCases) { workspace in
-                        Text(viewModel.workspaceTitle(workspace)).tag(workspace)
+                        Text(viewModel.workspaceTitle(workspace))
+                            .tag(workspace)
+                            .accessibilityIdentifier("history.workspace.\(workspace.rawValue)")
                     }
                 }
                 .pickerStyle(.segmented)
+                .accessibilityIdentifier("history.workspace")
                 if viewModel.workspace == .review {
-                    Button(viewModel.language.text("5 分钟复习", "5-Min Review")) { viewModel.startReview(limit: 5) }
+                    Button(viewModel.language.text("快速 5 题", "Quick 5")) { viewModel.startReview(limit: 5) }
                         .buttonStyle(.borderedProminent)
                         .disabled(viewModel.reviewQueue.isEmpty)
+                        .accessibilityIdentifier("history.quick5")
                     Button(viewModel.language.text("复习 10 题", "Review 10")) { viewModel.startReview(limit: 10) }
                         .disabled(viewModel.reviewQueue.isEmpty)
+                        .accessibilityIdentifier("history.review10")
                 }
             }
             .padding(12)
@@ -34,12 +39,14 @@ struct HistoryView: View {
             HStack {
                 TextField(viewModel.language.text("搜索 OCR 和对话", "Search OCR and conversations"), text: $viewModel.query)
                     .textFieldStyle(.roundedBorder)
+                    .accessibilityIdentifier("history.search")
                 Button(
                     viewModel.isClearingHistory
                         ? viewModel.language.text("正在清空…", "Clearing…")
                         : viewModel.language.text("清空全部", "Clear All")
                 ) { viewModel.clear() }
                     .disabled(viewModel.isClearingHistory || viewModel.sessions.isEmpty)
+                    .accessibilityIdentifier("history.clear")
             }
             .padding(12)
             if viewModel.workspace == .history {
@@ -72,7 +79,7 @@ struct HistoryView: View {
         HStack(spacing: 8) {
             Picker(viewModel.language.text("科目", "Section"), selection: $viewModel.sectionFilter) {
                 Text(viewModel.language.text("全部科目", "All Sections")).tag(SATSection?.none)
-                ForEach(SATSection.allCases.filter { $0 != .unknown }, id: \.self) { Text($0.rawValue).tag(Optional($0)) }
+                Text(SATSection.readingWriting.rawValue).tag(Optional(SATSection.readingWriting))
             }
             Picker(viewModel.language.text("领域", "Domain"), selection: $viewModel.domainFilter) {
                 Text(viewModel.language.text("全部领域", "All Domains")).tag("")
@@ -141,7 +148,12 @@ struct HistoryView: View {
                         Text(profile.skill).font(.system(size: 14, weight: .semibold))
                         Spacer()
                         Button(viewModel.language.text("针对练习", "Practice")) { viewModel.practice(profile) }
-                        Button(viewModel.language.text("重置", "Reset")) { viewModel.reset(profile) }
+                        Button(
+                            viewModel.isResetting(profile)
+                                ? viewModel.language.text("重置中…", "Resetting…")
+                                : viewModel.language.text("重置", "Reset")
+                        ) { viewModel.reset(profile) }
+                            .disabled(viewModel.isResetting(profile))
                     }
                     Text([profile.domain, "\(Int(profile.mastery))%", "\(Int(profile.accuracy))% accuracy", "\(profile.questionCount) questions"].joined(separator: " · "))
                         .font(.system(size: 11)).foregroundStyle(.secondary)
@@ -168,7 +180,9 @@ struct HistoryView: View {
             ForEach(sessions) { session in
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(session.title)
+                            Text(SessionTitle.make(from: session.ocrDocument.editedText.isEmpty
+                                                   ? session.title
+                                                   : session.ocrDocument.editedText))
                                 .font(.system(size: 14, weight: .semibold))
                                 .lineLimit(1)
                             Text(session.createdAt.formatted(date: .abbreviated, time: .shortened))
@@ -215,8 +229,14 @@ struct HistoryView: View {
                         }
                         Spacer()
                         Button(viewModel.language.text("打开", "Open")) { viewModel.open(session) }
+                            .accessibilityIdentifier("history.open.\(session.id.uuidString)")
                         if viewModel.workspace == .review {
-                            Button(viewModel.language.text("明天", "Tomorrow")) { viewModel.snooze(session) }
+                            Button(
+                                viewModel.isSnoozing(session)
+                                    ? viewModel.language.text("推迟中…", "Snoozing…")
+                                    : viewModel.language.text("明天", "Tomorrow")
+                            ) { viewModel.snooze(session) }
+                                .disabled(viewModel.isSnoozing(session))
                         }
                         Button(
                             viewModel.isDeleting(session)

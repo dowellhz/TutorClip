@@ -31,18 +31,14 @@ struct NeedsReviewGuidanceView: View {
         case .chooseGap:
             Text(viewModel.text("你卡在哪里？", "Where are you stuck?"))
                 .font(.system(size: 12, weight: .semibold))
-            if isMathQuestion {
-                gapRow([.mathConcept, .mathModeling])
-                gapRow([.mathExecution, .mathRepresentation])
-                gapRow([.explanationStillUnclear])
-            } else {
-                Button(SATLearningGap.englishReading.title(language: viewModel.language)) { viewModel.selectLearningGap(.englishReading) }
-                    .buttonStyle(PrimaryCapsuleButtonStyle())
-                gapRow([.comprehension, .concept])
-                gapRow([.application, .explanationStillUnclear])
-            }
+            Button(SATLearningGap.englishReading.title(language: viewModel.language)) { viewModel.selectLearningGap(.englishReading) }
+                .buttonStyle(PrimaryCapsuleButtonStyle())
+                .accessibilityIdentifier("needsReview.gap.englishReading")
+            gapRow([.comprehension, .concept])
+            gapRow([.application, .explanationStillUnclear])
             Button(SATLearningGap.aiDiagnose.title(language: viewModel.language)) { viewModel.selectLearningGap(.aiDiagnose) }
                 .buttonStyle(ChromeButtonStyle())
+                .accessibilityIdentifier("needsReview.gap.aiDiagnose")
         case .chooseEnglishBarrier:
             Text(viewModel.text("英文具体卡在哪里？", "What makes the English difficult?"))
                 .font(.system(size: 12, weight: .semibold))
@@ -73,6 +69,7 @@ struct NeedsReviewGuidanceView: View {
                 }
                     .buttonStyle(PrimaryCapsuleButtonStyle())
                     .disabled(viewModel.isStreaming)
+                    .accessibilityIdentifier("needsReview.startLearning")
             }
         case .foundation:
             Text(flow.gap == .englishReading
@@ -105,7 +102,7 @@ struct NeedsReviewGuidanceView: View {
                     )
                 }
                     .buttonStyle(PrimaryCapsuleButtonStyle())
-                    .disabled(viewModel.isStreaming || flow.learningFocus == nil)
+                    .disabled(viewModel.isStreaming)
             }
         case .microCheck:
             Text(flow.gap == .englishReading
@@ -201,10 +198,6 @@ struct NeedsReviewGuidanceView: View {
         ]
     }
 
-    private var isMathQuestion: Bool {
-        viewModel.session.learningMetadata.section == .math || viewModel.session.category == .math
-    }
-
     @ViewBuilder
     private func loadingLabel(action: LearningLoadingAction, idle: String, loading: String) -> some View {
         if viewModel.learningLoadingAction == action, viewModel.isStreaming {
@@ -222,6 +215,7 @@ struct NeedsReviewGuidanceView: View {
             ForEach(gaps) { gap in
                 Button(gap.title(language: viewModel.language)) { viewModel.selectLearningGap(gap) }
                     .buttonStyle(ChromeButtonStyle())
+                    .accessibilityIdentifier("needsReview.gap.\(gap.rawValue)")
             }
         }
     }
@@ -230,6 +224,7 @@ struct NeedsReviewGuidanceView: View {
 private struct ReviewChoiceButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
+            .focusEffectDisabled()
             .foregroundStyle(.primary)
             .padding(.horizontal, 10)
             .padding(.vertical, 8)

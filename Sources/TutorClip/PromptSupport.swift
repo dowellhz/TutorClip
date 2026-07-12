@@ -1,6 +1,21 @@
 import Foundation
 
 extension PromptBuilder {
+    func customQuestionSystemPrompt(language: AppLanguage) -> String {
+        language.text(
+            """
+            你是经验丰富的 SAT 老师。只回答用户当前明确提出的问题，使用 OCR 题目作为上下文。
+            除非用户明确询问正确答案、正确选项、解题或某选项为何正确，否则禁止公布或暗示答案，也不要自动展开整题解析。
+            用户询问题型或考点时，只说明测试的能力、规则和识别方法；用户询问提示时只给下一步提示。回答使用简洁中文 Markdown。
+            """,
+            """
+            You are an experienced SAT tutor. Answer only the user's explicit question, using the OCR question as context.
+            Do not reveal or imply the answer unless the user explicitly asks for the correct answer, choice, solution, or why a choice is correct. Do not automatically expand into a full solution.
+            For questions about skill or question type, explain only the tested skill, rule, and recognition method. For hints, provide only the next hint. Use concise English Markdown.
+            """
+        )
+    }
+
     func practiceGenerationSystemPrompt(language: AppLanguage) -> String {
         if language == .english {
             return """
@@ -91,46 +106,66 @@ extension PromptBuilder {
     func practiceSimilarInstruction(language: AppLanguage) -> String {
         if language == .english {
             return """
-            Create one new SAT-style practice question with the same question type, tested skill, and approximate difficulty as the OCR question.
+            Create one new current Digital SAT Reading and Writing practice question with the same question type, tested skill, and approximate difficulty as the OCR question.
+            Create exactly one question with one A/B/C/D choice set. Never output paired questions, "Questions 1-2", a second numbered question, or a shared passage for multiple questions.
+            A Text 1/Text 2 passage pair is allowed only when the single question tests Cross-Text Connections.
             Do not reuse the original passage topic, names, wording, or answer choices.
             Do not show the answer, explanation, hint, or solution to the user.
+            If the question stem refers to an underlined portion, wrap exactly that visible portion in <u> and </u>. Never mention an underlined portion without these tags.
             Output exactly two blocks:
             FORMATTED_QUESTION
             the new practice question in clean Markdown, including passage/stimulus, question stem, and A/B/C/D choices
             END_FORMATTED_QUESTION
             QUESTION_METADATA
             Answer: correct choice letter
-            Type: exactly one of reading, writing, notesSynthesis, vocabulary, grammar, math, unknown
-            Section: Reading and Writing, Math, or unknown
+            Type: exactly one of reading, writing, notesSynthesis, vocabulary, grammar, or unknown
+            Section: Reading and Writing or unknown
             Domain: official SAT content domain
             Skill: official SAT skill
             QuestionTypeID: TutorClip stable question type ID
             KnowledgePoints: 1-3 TutorClip knowledge point IDs separated by commas
             Difficulty: easy, medium, hard, or unknown
             Confidence: number from 0 to 1
+            TeachingPurpose: diagnostic, instruction, guidedRecovery, verification, consolidation, transfer, or maintenance
+            Prerequisites: TutorClip knowledge point IDs or none
+            DistractorA: misconception tested by choice A, or correct
+            DistractorB: misconception tested by choice B, or correct
+            DistractorC: misconception tested by choice C, or correct
+            DistractorD: misconception tested by choice D, or correct
+            ExplanationBasis: concise facts or operations needed to verify the answer
             END_QUESTION_METADATA
             Do not output slash-separated labels such as reading/writing/notesSynthesis.
             Keep it realistic and concise.
             """
         }
         return """
-        请仿照 OCR 题目，生成一道新的 SAT 风格练习题，题型、考点和难度要接近原题。
+        请仿照 OCR 题目，生成一道符合当前 Digital SAT Reading and Writing 格式的新练习题，题型、考点和难度要接近原题。
+        只能生成一道题和一组 A/B/C/D 选项。禁止生成 Questions 1-2、成组题、第二道编号题目或供多题共用的文章。
+        只有考查 Cross-Text Connections 时才允许使用 Text 1/Text 2 双文本，但双文本后仍然只能有一道题。
         不要复用原题的话题、人物、措辞或选项。
         不要把答案、解析、提示或解题思路展示给用户。
+        如果题干提到 underlined portion、underlined sentence、划线部分或下划线内容，必须用 <u> 和 </u> 精确包住文章中对应的可见文字；没有这对标签就不得提到划线内容。
         必须严格输出两个块：
         FORMATTED_QUESTION
         新练习题本身，用清晰 Markdown 排版，包含文章或题干材料、问题、A/B/C/D 选项
         END_FORMATTED_QUESTION
         QUESTION_METADATA
         Answer: 正确选项字母
-        Type: 只能填一个标签：reading、writing、notesSynthesis、vocabulary、grammar、math、unknown
-        Section: 只能填 Reading and Writing、Math 或 unknown
+        Type: 只能填一个标签：reading、writing、notesSynthesis、vocabulary、grammar 或 unknown
+        Section: 只能填 Reading and Writing 或 unknown
         Domain: College Board SAT 官方 Domain
         Skill: College Board SAT 官方 Skill
         QuestionTypeID: TutorClip 稳定题型 ID
         KnowledgePoints: 1-3 个 TutorClip 知识点 ID，以英文逗号分隔
         Difficulty: 只能填 easy、medium、hard 或 unknown
         Confidence: 0 到 1 之间的小数
+        TeachingPurpose: diagnostic、instruction、guidedRecovery、verification、consolidation、transfer 或 maintenance
+        Prerequisites: TutorClip 前置知识点 ID，多个用英文逗号分隔；没有则填 none
+        DistractorA: A 选项对应的典型误区；若为正确答案则填 correct
+        DistractorB: B 选项对应的典型误区；若为正确答案则填 correct
+        DistractorC: C 选项对应的典型误区；若为正确答案则填 correct
+        DistractorD: D 选项对应的典型误区；若为正确答案则填 correct
+        ExplanationBasis: 用于独立核验答案的简短事实、证据或运算依据
         END_QUESTION_METADATA
         不要输出 reading/writing/notesSynthesis 这种斜杠组合。
         题目要真实、简洁，适合学生重新做一遍。
@@ -195,8 +230,8 @@ extension PromptBuilder {
         return [lines, tables].filter { !$0.isEmpty }.joined(separator: "\n")
     }
 
-    func formattingStructureSummary(for document: OCRDocument) -> String {
-        guard !document.structuredTables.isEmpty else { return "" }
+    func formattingStructureSummary(for document: OCRDocument, includeTokenLayout: Bool = false) -> String {
+        guard !document.structuredTables.isEmpty || includeTokenLayout else { return "" }
         let title = document.documentTitle.map { "DOCUMENT_TITLE\n\($0.text)\nEND_DOCUMENT_TITLE" } ?? ""
         let paragraphs = (document.paragraphs ?? []).sorted { lhs, rhs in
             if abs(lhs.boundingBox.y - rhs.boundingBox.y) > 0.01 { return lhs.boundingBox.y > rhs.boundingBox.y }
@@ -219,27 +254,39 @@ extension PromptBuilder {
             }.joined(separator: "\n")
             return "STRUCTURED_TABLE_\(tableIndex + 1)\n\(rows)\nEND_STRUCTURED_TABLE_\(tableIndex + 1)"
         }.joined(separator: "\n")
-        return [title, paragraphBlock, nearbyLines, tables].filter { !$0.isEmpty }.joined(separator: "\n")
+        let tokenLayout = includeTokenLayout ? document.tokens
+            .sorted { lhs, rhs in
+                if abs(lhs.boundingBox.y - rhs.boundingBox.y) > 0.008 { return lhs.boundingBox.y > rhs.boundingBox.y }
+                return lhs.boundingBox.x < rhs.boundingBox.x
+            }
+            .prefix(180)
+            .map { token in
+                let box = token.boundingBox
+                return "[x:\(box.x.rounded2), y:\(box.y.rounded2), w:\(box.width.rounded2), h:\(box.height.rounded2)] \(token.text)"
+            }
+            .joined(separator: "\n") : ""
+        let tokenBlock = tokenLayout.isEmpty ? "" : "TOKEN_LAYOUT_BOTTOM_LEFT_COORDINATES\n\(tokenLayout)\nEND_TOKEN_LAYOUT"
+        let alternateTokens = includeTokenLayout ? (document.alternateTokens ?? []).prefix(180).map { token in
+            let box = token.boundingBox
+            return "[x:\(box.x.rounded2), y:\(box.y.rounded2), w:\(box.width.rounded2), h:\(box.height.rounded2)] \(token.text)"
+        }.joined(separator: "\n") : ""
+        let alternateBlock = document.alternateText.map {
+            "ALTERNATE_HIGH_CONTRAST_OCR\n\($0)\nALTERNATE_TOKEN_LAYOUT\n\(alternateTokens)\nEND_ALTERNATE_HIGH_CONTRAST_OCR"
+        } ?? ""
+        let candidates = includeTokenLayout ? (document.recognitionCandidates ?? []).enumerated().map {
+            "LINE_\($0.offset + 1): \($0.element)"
+        }.joined(separator: "\n") : ""
+        let alternateCandidates = includeTokenLayout ? (document.alternateRecognitionCandidates ?? []).enumerated().map {
+            "ALT_LINE_\($0.offset + 1): \($0.element)"
+        }.joined(separator: "\n") : ""
+        let candidateBlock = candidates.isEmpty ? "" : "VISION_LINE_CANDIDATES\n\(candidates)\n\(alternateCandidates)\nEND_VISION_LINE_CANDIDATES"
+        return [title, paragraphBlock, nearbyLines, tables, tokenBlock, alternateBlock, candidateBlock].filter { !$0.isEmpty }.joined(separator: "\n")
     }
 
     private func chineseExplanationInstruction(for category: SessionCategory) -> String {
         switch category {
         case .math:
-            return explainHeader(language: .chinese) + """
-            摘要块之后按这个结构讲：
-            ### 1. 正确答案
-            直接给最终答案，并用一句话说明核心原因。
-            ### 2. 已知条件
-            提取题目给出的数值、关系、图形信息或方程，不要套用阅读题证据格式。
-            ### 3. 考点
-            说明考的是代数、函数、比例、几何、统计或其他具体概念。
-            ### 4. 解题步骤
-            分步列式/计算，每一步说明为什么这么做。
-            ### 5. 易错点
-            说明常见误读、单位、符号、范围或计算陷阱。
-            ### 6. 选项排除
-            如果有 A/B/C/D，逐项说明每个错误选项对应的误区。
-            """
+            return "TutorClip 暂不支持数学题。不要解题、推导或提供答案。"
         case .grammar:
             return explainHeader(language: .chinese) + """
             摘要块之后按这个结构讲：
@@ -308,7 +355,7 @@ extension PromptBuilder {
     private func englishExplanationInstruction(for category: SessionCategory) -> String {
         switch category {
         case .math:
-            return explainHeader(language: .english) + "After the summary block, use Markdown sections: Correct Answer, Given Information, Tested Concept, Steps, Common Trap, Choice Elimination."
+            return "TutorClip does not support math questions. Do not solve, derive, or provide an answer."
         case .grammar:
             return explainHeader(language: .english) + "After the summary block, use Markdown sections: Correct Answer, Tested Rule, Sentence Structure, Why It Is Right, Why Other Choices Are Wrong, Transferable Rule."
         case .writing, .notesSynthesis:
@@ -351,7 +398,7 @@ extension PromptBuilder {
         case .grammar:
             return "题型要求：这是语法/表达题。优先讲清 tested rule，正确答案必须同时语法正确且符合上下文逻辑。"
         case .math:
-            return "题型要求：这是数学题。按已知条件、考点、步骤、易错点、最终答案讲；不要套阅读题的原文证据格式。"
+            return "TutorClip 暂不支持数学题。不要解题或提供答案。"
         case .writing:
             return "题型要求：这是 SAT Writing 题。优先判断题干目标和上下文逻辑，说明正确选项如何完成写作目的。"
         case .reading:
@@ -370,7 +417,7 @@ extension PromptBuilder {
         case .grammar:
             return "Question type guidance: This is a grammar or expression question. Explain the tested rule and name the specific issue in wrong choices."
         case .math:
-            return "Question type guidance: This is a math question. Explain given information, concept, setup, calculation, traps, and final answer."
+            return "TutorClip does not support math questions. Do not solve or provide an answer."
         case .writing:
             return "Question type guidance: This is an SAT Writing question. Focus on goal, context logic, precision, concision, and effectiveness."
         case .reading:

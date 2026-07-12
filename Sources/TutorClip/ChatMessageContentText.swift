@@ -57,7 +57,7 @@ struct ChatMessageContentText: View {
     private var markdownContent: String {
         let content = message.content.isEmpty ? "..." : message.content
         logMarkdownOnce(content)
-        return LatexDisplayNormalizer.displayString(from: content)
+        return content
     }
 
     private func logMarkdownOnce(_ markdown: String) {

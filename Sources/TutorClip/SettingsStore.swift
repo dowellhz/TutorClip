@@ -13,6 +13,7 @@ final class SettingsStore: ObservableObject {
         url = base.appendingPathComponent("settings.json")
         do {
             try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+            try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: base.path)
         } catch {
             persistenceError = error.localizedDescription
             RuntimeLog.write("settings-directory-create-failed \(error.localizedDescription)")
@@ -20,6 +21,7 @@ final class SettingsStore: ObservableObject {
         }
         guard FileManager.default.fileExists(atPath: url.path) else { return }
         do {
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
             let data = try Data(contentsOf: url)
             let decoded = try JSONDecoder.tutorClip.decode(AppSettings.self, from: data)
             var migrated = decoded
@@ -54,6 +56,7 @@ final class SettingsStore: ObservableObject {
         do {
             let data = try JSONEncoder.tutorClip.encode(value)
             try data.write(to: url, options: [.atomic])
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
             persistenceError = nil
             return true
         } catch {

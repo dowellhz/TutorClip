@@ -115,6 +115,9 @@ private final class ScreenCaptureProbeMarker {
             defer: false
         )
         window.isOpaque = true
+        // This marker is strongly owned by ScreenCaptureProbeMarker. Let ARC
+        // release it after close; AppKit auto-release would double-release it.
+        window.isReleasedWhenClosed = false
         window.backgroundColor = .black
         window.level = .floating
         window.ignoresMouseEvents = true

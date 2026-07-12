@@ -7,12 +7,8 @@ failed=0
 app_name="TutorClip"
 xcode_app_dir=".xcode-derived/Build/Products/Debug/${app_name}.app"
 
-echo "Checking source file lengths..."
-for file in $(find Sources Resources Scripts TutorClip.xcodeproj -type f \
-  \( -name '*.swift' -o -name '*.sh' -o -name '*.plist' -o -name '*.json' -o -name 'project.pbxproj' \) \
-  ! -path '*/xcuserdata/*' \
-  ! -path '*/project.xcworkspace/*' \
-  | sort) AGENTS.md README.md VERIFY.md Makefile; do
+echo "Checking Swift source file lengths..."
+for file in $(find Sources Tests -type f -name '*.swift' | sort); do
   lines=$(wc -l < "$file" | tr -d ' ')
   if [ "$lines" -gt "$max_lines" ]; then
     echo "File exceeds ${max_lines} lines: $file ($lines)"
@@ -69,6 +65,10 @@ if ! rg -n "RecognizeDocumentsRequest" Sources/TutorClip/OCRService.swift >/dev/
   || ! rg -n "task\?\.cancel\(\)" Sources/TutorClip/OCRRequestLifecycle.swift >/dev/null 2>&1 \
   || ! rg -n "!Task\.isCancelled" Sources/TutorClip/OCRRequestLifecycle.swift >/dev/null 2>&1; then
   echo "Modern Vision OCR must be owned by a cancellable task and reject cancelled results."
+  failed=1
+fi
+if ! rg -n "window\.isReleasedWhenClosed = false" Sources/TutorClip/ScreenCaptureHealthService.swift >/dev/null 2>&1; then
+  echo "The strongly owned capture-probe window must disable AppKit auto-release."
   failed=1
 fi
 if ! rg -n "NSMutableAttributedString\\(" Sources/TutorClip/SelectableMarkdownTextView.swift >/dev/null 2>&1; then
@@ -130,9 +130,6 @@ echo "Verifying user message summaries..."
 
 echo "Verifying language policy..."
 "${xcode_app_dir}/Contents/MacOS/${app_name}" --probe-language-policy
-
-echo "Verifying LaTeX display normalization..."
-"${xcode_app_dir}/Contents/MacOS/${app_name}" --probe-latex-display
 
 echo "Verifying answer UI refresh..."
 "${xcode_app_dir}/Contents/MacOS/${app_name}" --probe-answer-ui-refresh

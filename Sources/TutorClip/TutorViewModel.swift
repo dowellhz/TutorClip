@@ -12,10 +12,12 @@ final class TutorViewModel: ObservableObject {
     @Published var answerSummary: AnswerSummary?
     @Published var isStreaming: Bool = false
     @Published var errorMessage: String?
+    @Published var isDailyPracticeComplete = false
     @Published var viewMode: SourceViewMode = .text
     @Published var ocrFormatState: OCRFormatState = .idle
     @Published var learningFeedback: String?
     @Published var learningLoadingAction: LearningLoadingAction?
+    @Published private(set) var isAdvancingPractice = false
     @Published var viewedQuestionSnapshot: SATQuestionSnapshot?
     private var lastRequest: TutorRequest?
     var categorySourceAI = false
@@ -23,28 +25,32 @@ final class TutorViewModel: ObservableObject {
 
     let settingsStore: SettingsStore
     let historyStore: HistoryStore
+    let masteryEvidenceStore: MasteryEvidenceStore?
     let deepSeekClient: any DeepSeekStreaming
     let promptBuilder: PromptBuilder
     private let onRecapture: () -> Void
     private let onSettings: () -> Void
     private let onKnowledgeMap: () -> Void
     private let onClose: () -> Void
+    private let onNextQuestion: () -> Void
     private var settingsCancellable: AnyCancellable?
     private var sessionCancellable: AnyCancellable?
     var inFlightTask: Task<Void, Never>?
     var activeRequestID: UUID?
 
-    init(session: TutorSession, isLoadingOCR: Bool, settingsStore: SettingsStore, historyStore: HistoryStore, deepSeekClient: any DeepSeekStreaming, promptBuilder: PromptBuilder, onRecapture: @escaping () -> Void, onSettings: @escaping () -> Void, onKnowledgeMap: @escaping () -> Void = {}, onClose: @escaping () -> Void) {
+    init(session: TutorSession, isLoadingOCR: Bool, settingsStore: SettingsStore, historyStore: HistoryStore, masteryEvidenceStore: MasteryEvidenceStore? = nil, deepSeekClient: any DeepSeekStreaming, promptBuilder: PromptBuilder, onRecapture: @escaping () -> Void, onSettings: @escaping () -> Void, onKnowledgeMap: @escaping () -> Void = {}, onNextQuestion: @escaping () -> Void = {}, onClose: @escaping () -> Void) {
         self.session = session
         self.isLoadingOCR = isLoadingOCR
         self.settingsStore = settingsStore
         self.historyStore = historyStore
+        self.masteryEvidenceStore = masteryEvidenceStore
         self.deepSeekClient = deepSeekClient
         self.promptBuilder = promptBuilder
         self.onRecapture = onRecapture
         self.onSettings = onSettings
         self.onKnowledgeMap = onKnowledgeMap
         self.onClose = onClose
+        self.onNextQuestion = onNextQuestion
         settingsCancellable = settingsStore.$settings.sink { [weak self] _ in
             self?.objectWillChange.send()
         }
@@ -53,6 +59,14 @@ final class TutorViewModel: ObservableObject {
 
     var language: AppLanguage {
         settingsStore.settings.appLanguage
+    }
+
+    var isGeneratingPracticeQuestion: Bool {
+        isStreaming && lastRequest?.action == .practiceSimilar
+    }
+
+    var isAdaptiveQuestionPlaceholder: Bool {
+        session.ocrDocument.editedText.hasPrefix("SAT adaptive practice.")
     }
 
     func text(_ chinese: String, _ english: String) -> String {
@@ -82,9 +96,17 @@ final class TutorViewModel: ObservableObject {
 
     func replaceSession(_ session: TutorSession, isLoadingOCR: Bool) {
         cancelInFlightRequest(reason: "session-replaced")
+        if self.session.id == session.id {
+            self.session = session
+            self.isLoadingOCR = isLoadingOCR
+            objectWillChange.send()
+            return
+        }
+        self.session.discardScreenshot()
         self.session = session
         self.isLoadingOCR = isLoadingOCR
-        practiceVariationPlanner.reset()
+        isDailyPracticeComplete = false
+        viewMode = .text
         resetTransientState()
         ocrFormatState = .idle
         bindSessionChanges()
@@ -101,6 +123,29 @@ final class TutorViewModel: ObservableObject {
         onClose()
     }
 
+    func continueAdaptivePractice() {
+        guard !isAdvancingPractice else { return }
+        isAdvancingPractice = true
+        closeAndPersistIfNeeded(recordMasteryEvidence: false)
+        guard settingsStore.settings.learningProgressEnabled, let masteryEvidenceStore else {
+            isAdvancingPractice = false
+            onNextQuestion()
+            return
+        }
+        masteryEvidenceStore.record(session: session, enabled: true) { [weak self] success in
+            guard let self else { return }
+            self.isAdvancingPractice = false
+            guard success else {
+                self.errorMessage = self.text(
+                    "学习证据保存失败，尚未进入下一题。",
+                    "Learning evidence was not saved; the next question was not opened."
+                )
+                return
+            }
+            self.onNextQuestion()
+        }
+    }
+
     func run(action: TutorAction) {
         if action == .formatOCR {
             formatOCR()
@@ -115,6 +160,10 @@ final class TutorViewModel: ObservableObject {
 
     func retryLastRequest() {
         guard let lastRequest else { return }
+        if lastRequest.action == .practiceSimilar {
+            generatePracticeQuestion()
+            return
+        }
         send(action: lastRequest.action, question: lastRequest.question)
     }
 
@@ -125,17 +174,10 @@ final class TutorViewModel: ObservableObject {
         send(action: .customQuestion, question: question)
     }
 
-    func closeAndPersistIfNeeded() {
-        cancelInFlightRequest(reason: "window-closed")
-        session.discardScreenshot()
-        refreshQuestionCategory()
-        historyStore.save(session: session, enabled: settingsStore.settings.historyEnabled) { [weak self] success in
-            guard let self, !success else { return }
-            self.errorMessage = self.text("历史数据库写入失败。", "History database write failed.")
-        }
-    }
-
-    func generatePracticeQuestion() {
+    func generatePracticeQuestion(
+        teachingPurposeOverride: SATTeachingPurpose? = nil,
+        difficultyOverride: SATDifficulty? = nil
+    ) {
         guard !isStreaming else { return }
         errorMessage = nil
         lastRequest = TutorRequest(action: .practiceSimilar, question: nil)
@@ -143,6 +185,8 @@ final class TutorViewModel: ObservableObject {
         let requestID = beginRequest()
         let targetQuestionTypeID = session.learningMetadata.questionTypeID
         let targetKnowledgePointIDs = session.learningMetadata.knowledgePointIDs
+        let targetTeachingPurpose = teachingPurposeOverride ?? session.learningMetadata.teachingPurpose
+        let targetDifficulty = difficultyOverride ?? session.learningMetadata.difficulty
         let targetKnowledgePoints = targetKnowledgePointIDs.compactMap(SATKnowledgeCatalog.knowledgePoint)
         let knowledgeTarget = targetKnowledgePoints.map { "\($0.titleEN) [\($0.id)]" }.joined(separator: ", ")
         let baseUserContent = promptBuilder.userPrompt(
@@ -152,14 +196,14 @@ final class TutorViewModel: ObservableObject {
             customQuestion: nil,
             category: session.category,
             language: language
-        ) + "\n\nTarget SAT Skill: \(session.learningMetadata.skill.isEmpty ? "infer from question" : session.learningMetadata.skill)\nTarget question type ID: \(targetQuestionTypeID.isEmpty ? "infer from question" : targetQuestionTypeID)\nTarget knowledge point (test this point only): \(knowledgeTarget.isEmpty ? "infer from question" : knowledgeTarget)\nTarget difficulty: \(session.learningMetadata.difficulty.rawValue)"
+        ) + "\n\nTarget SAT Skill: \(session.learningMetadata.skill.isEmpty ? "infer from question" : session.learningMetadata.skill)\nTarget question type ID: \(targetQuestionTypeID.isEmpty ? "infer from question" : targetQuestionTypeID)\nTarget knowledge point (test this point only): \(knowledgeTarget.isEmpty ? "infer from question" : knowledgeTarget)\nTarget difficulty: \(targetDifficulty.rawValue)"
         let variation = practiceVariationPlanner.nextVariation()
         let sourceLearningFlow = session.learningMetadata.needsReviewFlow
         inFlightTask = Task { [weak self] in
             guard let self else { return }
             defer { self.finishRequest(requestID) }
             do {
-                for attempt in 0..<2 {
+                for attempt in 0..<3 {
                     var raw = ""
                     let diversity = practiceVariationPlanner.diversityInstruction(for: variation, retrying: attempt > 0)
                     let messages = [
@@ -175,7 +219,11 @@ final class TutorViewModel: ObservableObject {
                     RuntimeLog.writeTextBlock("practice-similar-raw attempt=\(attempt + 1)", raw)
                     var parsed = GeneratedQuestion.parse(raw, requireQuestionBlock: true)
                     guard !parsed.question.isEmpty else { continue }
-                    let validation = try await PracticeQuestionValidator(client: deepSeekClient).validate(parsed)
+                    let validation = try await PracticeQuestionValidator(client: deepSeekClient).validate(
+                        parsed,
+                        expectedQuestionTypeID: targetQuestionTypeID,
+                        expectedKnowledgePointIDs: targetKnowledgePointIDs
+                    )
                     guard validation.isValid else {
                         RuntimeLog.write("practice-similar-retrying validation=failed reason=\(validation.reason)")
                         continue
@@ -186,6 +234,10 @@ final class TutorViewModel: ObservableObject {
                         parsed.learningMetadata.questionTypeID = targetQuestionTypeID
                         parsed.learningMetadata.knowledgePointIDs = targetKnowledgePointIDs
                     }
+                    parsed.learningMetadata.teachingPurpose = targetTeachingPurpose
+                    parsed.learningMetadata.difficulty = targetDifficulty
+                    parsed.learningMetadata.variationTopic = variation.topic
+                    parsed.learningMetadata.variationStructure = variation.structure
                     if sourceLearningFlow.stage == .easyPractice || sourceLearningFlow.stage == .pendingVerification {
                         var continuedFlow = sourceLearningFlow
                         let role: SATQuestionChainRole = sourceLearningFlow.stage == .easyPractice ? .easyPractice : .verification
@@ -209,9 +261,12 @@ final class TutorViewModel: ObservableObject {
                     }
                     RuntimeLog.write("practice-similar-retrying exact-duplicate=true")
                 }
-                errorMessage = text("新练习题与最近题目重复，请再试一次。", "The new practice question repeated a recent question. Try again.")
+                errorMessage = text(
+                    "未能生成考点匹配且答案唯一的新题，请重试。",
+                    "A new question with the right target and one unique answer could not be generated. Try again."
+                )
                 restoreDifficultyAfterFailedPractice(sourceLearningFlow)
-                RuntimeLog.write("practice-similar-rejected attempts=2")
+                RuntimeLog.write("practice-similar-rejected attempts=3")
             } catch is CancellationError {
                 RuntimeLog.write("practice-similar-cancelled")
             } catch {
@@ -290,7 +345,15 @@ final class TutorViewModel: ObservableObject {
                         }
                     }
                     let learningContent = applyNeedsReviewResponse(validatedContent, action: action)
-                    applyProcessedResponse(TutorResponseProcessor.process(rawContent: learningContent, action: action), toMessageAt: index)
+                    var processed = TutorResponseProcessor.process(rawContent: learningContent, action: action)
+                    if action == .vocabulary {
+                        processed = try await VocabularyResponseRepairer.repairIfNeeded(
+                            processed,
+                            rawContent: learningContent,
+                            client: deepSeekClient
+                        )
+                    }
+                    applyProcessedResponse(processed, toMessageAt: index)
                 }
             } catch is CancellationError {
                 RuntimeLog.write("chat-request-cancelled action=\(action.rawValue)")
@@ -322,7 +385,15 @@ final class TutorViewModel: ObservableObject {
             }
         }
         if !response.vocabularyCards.isEmpty {
-            session.vocabularyCards = response.vocabularyCards
+            session.vocabularyCards = response.vocabularyCards.map { incoming in
+                var card = incoming
+                card.sourceSessionID = session.id
+                return card
+            }
+            masteryEvidenceStore?.record(
+                session: session,
+                enabled: settingsStore.settings.learningProgressEnabled
+            )
             RuntimeLog.write("vocabulary-cards count=\(response.vocabularyCards.count)")
         }
     }
@@ -361,25 +432,4 @@ final class TutorViewModel: ObservableObject {
         viewedQuestionSnapshot = nil
     }
 
-    func classifyQuestionCategoryWithAI(_ text: String) async {
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        var raw = ""
-        do {
-            try await deepSeekClient.stream(messages: promptBuilder.classifyQuestionPrompt(text: text)) { token in
-                raw += token
-            }
-            let category = TutorQuestionParsing.category(fromAI: raw)
-            if category != .unknown {
-                session.category = category
-                categorySourceAI = true
-                RuntimeLog.write("question-category-ai \(category.rawValue)")
-            } else {
-                RuntimeLog.writeTextBlock("question-category-ai-unknown", raw)
-            }
-        } catch is CancellationError {
-            RuntimeLog.write("question-category-ai-cancelled")
-        } catch {
-            RuntimeLog.write("question-category-ai-error \(error.localizedDescription)")
-        }
-    }
 }

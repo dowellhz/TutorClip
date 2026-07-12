@@ -202,9 +202,9 @@ enum DiagnosticUIProbe {
         viewModel.selectedText = "old selection"
         viewModel.selectedTextRect = CGRect(x: 1, y: 2, width: 3, height: 4)
         viewModel.answerSummary = AnswerSummary(answer: "B", reason: "old reason", evidence: "old evidence")
-        viewModel.updateOCRText("3x^2 + 4x + 1 = 0\n\nWhat is x?\n\nA) 1\n\nB) 2\n\nC) 3\n\nD) 4")
+        viewModel.updateOCRText("Which choice completes the text according to Standard English conventions?\n\nA) were\n\nB) was\n\nC) be\n\nD) being")
 
-        let sourceUpdated = session.ocrDocument.editedText.contains("3x^2")
+        let sourceUpdated = session.ocrDocument.editedText.contains("Standard English conventions")
         let staleChatCleared = session.messages.isEmpty
         let answerStateCleared = session.selectedAnswer == nil
             && session.correctAnswer == nil
@@ -213,7 +213,7 @@ enum DiagnosticUIProbe {
             && session.vocabularyCards.isEmpty
         let selectionCleared = viewModel.selectedText.isEmpty
             && viewModel.selectedTextRect == nil
-        let categoryRefreshed = session.category == .math
+        let categoryRefreshed = session.category == .grammar
         print("sourceUpdated=\(sourceUpdated)")
         print("staleChatCleared=\(staleChatCleared)")
         print("answerStateCleared=\(answerStateCleared)")

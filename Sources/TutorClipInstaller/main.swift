@@ -1,51 +1,56 @@
 import AppKit
 import Security
+import SwiftUI
 
 private let tutorClipBundleID = "com.linlu.TutorClip"
 
-@main
 @MainActor
-final class InstallerAppDelegate: NSObject, NSApplicationDelegate {
-    private var window: NSWindow!
-    private var statusLabel: NSTextField!
-    private var detailLabel: NSTextField!
-    private var installButton: NSButton!
-    private var progress: NSProgressIndicator!
+final class InstallerAppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
+    @Published private(set) var status = "准备安装 TutorClip"
+    @Published private(set) var detail = "安装器会自动退出正在运行的旧版本，然后完成替换。"
+    @Published private(set) var isInstalling = false
+    @Published private(set) var isComplete = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
-        buildWindow()
-        window.center()
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-        updateStatus("准备安装 TutorClip", detail: "安装器会自动退出正在运行的旧版本，然后完成替换。")
+        presentWindowWhenReady(attemptsRemaining: 10)
     }
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
-
-    @objc private func startInstallation() {
-        installButton.isEnabled = false
-        progress.startAnimation(nil)
-        Task { @MainActor in
-            defer {
-                progress.stopAnimation(nil)
-                installButton.isEnabled = true
+    private func presentWindowWhenReady(attemptsRemaining: Int) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            guard let window = NSApp.windows.first(where: { $0.canBecomeKey }) else {
+                if attemptsRemaining > 1 {
+                    self.presentWindowWhenReady(attemptsRemaining: attemptsRemaining - 1)
+                }
+                return
             }
+            NSRunningApplication.current.activate(options: [.activateAllWindows])
+            window.collectionBehavior.insert(.moveToActiveSpace)
+            window.center()
+            window.makeKeyAndOrderFront(nil)
+            window.orderFrontRegardless()
+        }
+    }
+
+    func startInstallation() {
+        guard !isInstalling else { return }
+        if isComplete {
+            NSApp.terminate(nil)
+            return
+        }
+        isInstalling = true
+        Task { @MainActor in
+            defer { isInstalling = false }
             do {
                 try await performInstallation()
                 updateStatus("安装完成", detail: "TutorClip 已更新并重新启动。")
-                installButton.title = "完成"
-                installButton.action = #selector(closeInstaller)
+                isComplete = true
             } catch is CancellationError {
                 updateStatus("安装已取消", detail: "没有替换现有版本。")
             } catch {
                 updateStatus("安装失败", detail: error.localizedDescription)
             }
         }
-    }
-
-    @objc private func closeInstaller() {
-        NSApp.terminate(nil)
     }
 
     private func performInstallation() async throws {
@@ -157,69 +162,9 @@ final class InstallerAppDelegate: NSObject, NSApplicationDelegate {
         return alert.runModal() == .alertFirstButtonReturn
     }
 
-    private func buildWindow() {
-        window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 500, height: 330),
-            styleMask: [.titled, .closable, .fullSizeContentView],
-            backing: .buffered,
-            defer: false
-        )
-        window.title = "安装 TutorClip"
-        window.titlebarAppearsTransparent = true
-        window.isMovableByWindowBackground = true
-
-        let icon = NSImageView(image: NSApplication.shared.applicationIconImage)
-        icon.imageScaling = .scaleProportionallyUpOrDown
-        icon.translatesAutoresizingMaskIntoConstraints = false
-
-        statusLabel = NSTextField(labelWithString: "")
-        statusLabel.font = .systemFont(ofSize: 22, weight: .semibold)
-        statusLabel.alignment = .center
-        statusLabel.translatesAutoresizingMaskIntoConstraints = false
-
-        detailLabel = NSTextField(wrappingLabelWithString: "")
-        detailLabel.font = .systemFont(ofSize: 13)
-        detailLabel.textColor = .secondaryLabelColor
-        detailLabel.alignment = .center
-        detailLabel.maximumNumberOfLines = 3
-        detailLabel.translatesAutoresizingMaskIntoConstraints = false
-
-        progress = NSProgressIndicator()
-        progress.style = .spinning
-        progress.controlSize = .small
-        progress.isDisplayedWhenStopped = false
-
-        installButton = NSButton(title: "安装", target: self, action: #selector(startInstallation))
-        installButton.keyEquivalent = "\r"
-        installButton.bezelStyle = .rounded
-
-        let controls = NSStackView(views: [progress, installButton])
-        controls.orientation = .horizontal
-        controls.spacing = 12
-        controls.alignment = .centerY
-
-        let stack = NSStackView(views: [icon, statusLabel, detailLabel, controls])
-        stack.orientation = .vertical
-        stack.alignment = .centerX
-        stack.spacing = 16
-        stack.edgeInsets = NSEdgeInsets(top: 42, left: 38, bottom: 32, right: 38)
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        window.contentView = NSView()
-        window.contentView?.addSubview(stack)
-        NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: window.contentView!.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: window.contentView!.trailingAnchor),
-            stack.topAnchor.constraint(equalTo: window.contentView!.topAnchor),
-            stack.bottomAnchor.constraint(equalTo: window.contentView!.bottomAnchor),
-            icon.widthAnchor.constraint(equalToConstant: 92),
-            icon.heightAnchor.constraint(equalToConstant: 92),
-            detailLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 410)
-        ])
-    }
-
     private func updateStatus(_ status: String, detail: String) {
-        statusLabel.stringValue = status
-        detailLabel.stringValue = detail
+        self.status = status
+        self.detail = detail
     }
 
     private func shellQuote(_ value: String) -> String {
@@ -228,6 +173,53 @@ final class InstallerAppDelegate: NSObject, NSApplicationDelegate {
 
     private func appleScriptQuote(_ value: String) -> String {
         "\"" + value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
+    }
+}
+
+private struct InstallerView: View {
+    @ObservedObject var controller: InstallerAppDelegate
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(nsImage: NSApplication.shared.applicationIconImage)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 92, height: 92)
+            Text(controller.status)
+                .font(.system(size: 22, weight: .semibold))
+            Text(controller.detail)
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 410)
+            HStack(spacing: 12) {
+                if controller.isInstalling {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+                Button(controller.isComplete ? "完成" : "安装") {
+                    controller.startInstallation()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(controller.isInstalling)
+            }
+        }
+        .padding(.horizontal, 38)
+        .padding(.vertical, 32)
+        .frame(width: 500, height: 330)
+    }
+}
+
+@main
+private struct InstallerMain: App {
+    @NSApplicationDelegateAdaptor(InstallerAppDelegate.self) private var delegate
+
+    var body: some Scene {
+        WindowGroup("安装 TutorClip") {
+            InstallerView(controller: delegate)
+        }
+        .defaultSize(width: 500, height: 330)
+        .windowResizability(.contentSize)
     }
 }
 

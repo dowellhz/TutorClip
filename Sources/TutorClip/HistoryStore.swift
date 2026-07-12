@@ -12,11 +12,12 @@ final class HistoryStore: ObservableObject {
         worker = HistoryDatabaseWorker(baseDirectory: baseDirectory)
     }
 
-    func open() {
+    func open(completion: (() -> Void)? = nil) {
         worker.open { [weak self] sessions, masteredIDs in
             Task { @MainActor in
                 self?.sessions = sessions
                 self?.manuallyMasteredKnowledgePointIDs = masteredIDs
+                completion?()
             }
         }
     }
@@ -25,12 +26,42 @@ final class HistoryStore: ObservableObject {
         worker.close()
     }
 
+    func closeAndWait() {
+        worker.closeAndWait()
+    }
+
     func save(session: TutorSession, enabled: Bool, completion: ((Bool) -> Void)? = nil) {
         guard enabled else {
             completion?(true)
             return
         }
         guard let payload = HistorySavePayload(session: session) else {
+            completion?(false)
+            return
+        }
+        worker.save(payload: payload) { [weak self] result in
+            Task { @MainActor in
+                self?.sessions = result.sessions
+                completion?(result.success)
+            }
+        }
+    }
+
+    func save(
+        session: TutorSession,
+        detailedHistoryEnabled: Bool,
+        learningProgressEnabled: Bool,
+        completion: ((Bool) -> Void)? = nil
+    ) {
+        guard detailedHistoryEnabled else {
+            completion?(true)
+            return
+        }
+        guard let payload = HistorySavePayload(
+            session: session,
+            includeDetails: true,
+            includeLearning: learningProgressEnabled
+        ) else {
             completion?(false)
             return
         }
@@ -70,6 +101,15 @@ final class HistoryStore: ObservableObject {
         }
     }
 
+    func clearManualMastery(completion: ((Bool) -> Void)? = nil) {
+        worker.clearKnowledgeMastery { [weak self] success in
+            Task { @MainActor in
+                if success { self?.manuallyMasteredKnowledgePointIDs = [] }
+                completion?(success)
+            }
+        }
+    }
+
     func search(_ query: String) -> [TutorSession] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return sessions }
@@ -80,4 +120,3 @@ final class HistoryStore: ObservableObject {
         }
     }
 }
-

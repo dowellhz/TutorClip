@@ -100,13 +100,8 @@ struct SelectableMarkdownTextView: NSViewRepresentable {
             storage?.removeAttribute(.underlineStyle, range: fullRange)
             let source = textView.string as NSString
             for text in texts where !text.isEmpty {
-                var searchRange = NSRange(location: 0, length: source.length)
-                while searchRange.length > 0 {
-                    let found = source.range(of: text, options: [.caseInsensitive, .diacriticInsensitive], range: searchRange)
-                    guard found.location != NSNotFound else { break }
+                if let found = UnderlineTextMatcher.uniqueRange(of: text, in: source) {
                     storage?.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: found)
-                    let next = found.location + found.length
-                    searchRange = NSRange(location: next, length: source.length - next)
                 }
             }
         }
@@ -157,14 +152,28 @@ struct SelectableMarkdownTextView: NSViewRepresentable {
     }
 }
 
+enum UnderlineTextMatcher {
+    static func uniqueRange(of text: String, in source: NSString) -> NSRange? {
+        let options: NSString.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
+        let whole = NSRange(location: 0, length: source.length)
+        let first = source.range(of: text, options: options, range: whole)
+        guard first.location != NSNotFound else { return nil }
+        let nextLocation = first.location + first.length
+        let remaining = NSRange(location: nextLocation, length: source.length - nextLocation)
+        return source.range(of: text, options: options, range: remaining).location == NSNotFound
+            ? first
+            : nil
+    }
+}
+
 enum SelectableQuestionTextRenderer {
     static func attributedString(from markdown: String) -> NSAttributedString {
         let result = NSMutableAttributedString()
         let normalized = questionDisplayMarkdown(from: markdown)
         let lines = normalized.components(separatedBy: .newlines)
         for (index, line) in lines.enumerated() {
-            let displayText = LatexDisplayNormalizer.displayString(from: displayLine(from: line))
-            result.append(inlineAttributedString(from: displayText))
+            let displayText = displayLine(from: line)
+            result.append(inlineAttributedStringWithUnderlines(from: displayText))
             if index < lines.count - 1 {
                 result.append(NSAttributedString(string: "\n", attributes: baseAttributes()))
             }
@@ -202,17 +211,46 @@ enum SelectableQuestionTextRenderer {
         do {
             return try NSAttributedString(
                 markdown: markdown,
-                options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace),
+                options: AttributedString.MarkdownParsingOptions(
+                    interpretedSyntax: .inlineOnlyPreservingWhitespace,
+                    failurePolicy: .returnPartiallyParsedIfPossible
+                ),
                 baseURL: nil
             )
         } catch {
-            RuntimeLog.write("question-markdown-parse-failed \(error.localizedDescription)")
-            return NSAttributedString(string: markdown, attributes: baseAttributes())
+            MarkdownFallbackDiagnostics.logOnce(markdown: markdown, error: error)
+            let readableFallback = markdown
+                .replacingOccurrences(of: "**", with: "")
+                .replacingOccurrences(of: "`", with: "")
+            return NSAttributedString(string: readableFallback, attributes: baseAttributes())
         }
+    }
+
+    private static func inlineAttributedStringWithUnderlines(from markdown: String) -> NSAttributedString {
+        let segments = QuestionUnderlineMarkup.segments(in: markdown)
+        let markdownWithoutUnderlineTags = segments.map(\.text).joined()
+        let result = inlineAttributedString(from: markdownWithoutUnderlineTags).mutableCopy() as! NSMutableAttributedString
+        let renderedSource = result.string as NSString
+        var searchLocation = 0
+
+        for segment in segments where segment.isUnderlined {
+            let target = inlineAttributedString(from: segment.text).string
+            guard !target.isEmpty, searchLocation <= renderedSource.length else { continue }
+            let searchRange = NSRange(location: searchLocation, length: renderedSource.length - searchLocation)
+            let found = renderedSource.range(of: target, range: searchRange)
+            guard found.location != NSNotFound else { continue }
+            result.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: found)
+            searchLocation = found.location + found.length
+        }
+        return result
     }
 
     private static func displayLine(from line: String) -> String {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
+        if trimmed.hasPrefix(">") {
+            return trimmed.drop(while: { $0 == ">" || $0.isWhitespace })
+                .trimmingCharacters(in: .whitespaces)
+        }
         guard trimmed.hasPrefix("#") else { return line }
         var index = trimmed.startIndex
         while index < trimmed.endIndex, trimmed[index] == "#" {
@@ -249,5 +287,25 @@ enum SelectableQuestionTextRenderer {
             attributed.addAttribute(.font, value: NSFont.systemFont(ofSize: 15), range: range)
         }
         attributed.addAttribute(.foregroundColor, value: NSColor.labelColor, range: fullRange)
+    }
+}
+
+private enum MarkdownFallbackDiagnostics {
+    private static let lock = NSLock()
+    private static var loggedHashes: Set<UInt64> = []
+
+    static func logOnce(markdown: String, error: Error) {
+        let hash = stableHash(markdown)
+        lock.lock()
+        let isNew = loggedHashes.insert(hash).inserted
+        lock.unlock()
+        guard isNew else { return }
+        RuntimeLog.write("question-markdown-plain-fallback hash=\(String(hash, radix: 16)) error=\(error.localizedDescription)")
+    }
+
+    private static func stableHash(_ text: String) -> UInt64 {
+        text.utf8.reduce(1_469_598_103_934_665_603) { hash, byte in
+            (hash ^ UInt64(byte)) &* 1_099_511_628_211
+        }
     }
 }

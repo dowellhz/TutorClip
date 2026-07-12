@@ -14,11 +14,15 @@ struct HistorySavePayload {
     var messagesJSON: String
     var learningJSON: String
 
-    init?(session: TutorSession) {
-        guard let ocrData = try? JSONEncoder.tutorClip.encode(session.ocrDocument),
-              let messagesData = try? JSONEncoder.tutorClip.encode(session.messages),
-              let vocabularyData = try? JSONEncoder.tutorClip.encode(session.vocabularyCards),
-              let learningData = try? JSONEncoder.tutorClip.encode(session.learningMetadata),
+    init?(session: TutorSession, includeDetails: Bool = true, includeLearning: Bool = true) {
+        let persistedDocument = includeDetails ? session.ocrDocument : OCRDocument.empty()
+        let persistedMessages = includeDetails ? session.messages : []
+        let persistedVocabulary = includeLearning ? session.vocabularyCards : []
+        let persistedLearning = includeLearning ? session.learningMetadata : SATLearningMetadata()
+        guard let ocrData = try? JSONEncoder.tutorClip.encode(persistedDocument),
+              let messagesData = try? JSONEncoder.tutorClip.encode(persistedMessages),
+              let vocabularyData = try? JSONEncoder.tutorClip.encode(persistedVocabulary),
+              let learningData = try? JSONEncoder.tutorClip.encode(persistedLearning),
               let ocrJSON = String(data: ocrData, encoding: .utf8),
               let messagesJSON = String(data: messagesData, encoding: .utf8),
               let vocabularyJSON = String(data: vocabularyData, encoding: .utf8),
@@ -26,13 +30,13 @@ struct HistorySavePayload {
             return nil
         }
         id = session.id
-        title = session.title
+        title = includeDetails ? session.title : "Learning progress"
         createdAt = session.createdAt
         updatedAt = session.updatedAt
         category = session.category
-        studyStatus = session.studyStatus
-        selectedAnswer = session.selectedAnswer
-        correctAnswer = session.correctAnswer
+        studyStatus = includeLearning ? session.studyStatus : .unreviewed
+        selectedAnswer = includeLearning ? session.selectedAnswer : nil
+        correctAnswer = includeLearning ? session.correctAnswer : nil
         self.vocabularyJSON = vocabularyJSON
         self.ocrJSON = ocrJSON
         self.messagesJSON = messagesJSON
@@ -58,6 +62,7 @@ final class HistoryDatabaseWorker {
     init(baseDirectory: URL? = nil) {
         let base = baseDirectory ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".tutorclip", isDirectory: true)
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: base.path)
         dbURL = base.appendingPathComponent("history.sqlite")
     }
 
@@ -69,6 +74,7 @@ final class HistoryDatabaseWorker {
                 completion([], [])
                 return
             }
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: self.dbURL.path)
             guard self.createSchemaIfNeeded(), self.migrateSchema(), self.seedSATKnowledgeCatalog() else {
                 RuntimeLog.write("history-schema-setup-failed \(self.databaseErrorMessage())")
                 sqlite3_close(self.db)
@@ -85,6 +91,13 @@ final class HistoryDatabaseWorker {
             guard let self else { return }
             sqlite3_close(self.db)
             self.db = nil
+        }
+    }
+
+    func closeAndWait() {
+        queue.sync {
+            sqlite3_close(db)
+            db = nil
         }
     }
 
@@ -137,6 +150,13 @@ final class HistoryDatabaseWorker {
             sqlite3_bind_text(statement, 1, id, -1, SQLITE_TRANSIENT)
             if mastered { sqlite3_bind_double(statement, 2, Date().timeIntervalSince1970) }
             completion(sqlite3_step(statement) == SQLITE_DONE, self.loadManuallyMasteredKnowledgePoints())
+        }
+    }
+
+    func clearKnowledgeMastery(completion: @escaping (Bool) -> Void) {
+        queue.async { [weak self] in
+            guard let self else { completion(false); return }
+            completion(self.execute("DELETE FROM sat_knowledge_mastery;"))
         }
     }
 
@@ -363,4 +383,3 @@ final class HistoryDatabaseWorker {
 }
 
 private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
-

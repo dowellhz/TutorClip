@@ -16,13 +16,18 @@ struct TutorSourcePanel: View {
 
     private var toolbar: some View {
         HStack {
-            Picker("", selection: $viewModel.viewMode) {
-                ForEach(SourceViewMode.allCases) { mode in
-                    Text(mode.title(language: viewModel.language)).tag(mode)
+            if viewModel.session.learningMetadata.isAIGenerated {
+                Text(SourceViewMode.text.title(language: viewModel.language))
+                    .font(.headline)
+            } else {
+                Picker("", selection: $viewModel.viewMode) {
+                    ForEach(SourceViewMode.allCases) { mode in
+                        Text(mode.title(language: viewModel.language)).tag(mode)
+                    }
                 }
+                .pickerStyle(.segmented)
+                .frame(width: 168)
             }
-            .pickerStyle(.segmented)
-            .frame(width: 168)
 
             Spacer()
 
@@ -43,6 +48,11 @@ struct TutorSourcePanel: View {
                 }
                 .buttonStyle(ChromeButtonStyle())
             }
+            if viewModel.isViewingQuestionSnapshot {
+                Text(viewModel.text("只读回看", "Read-only"))
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -50,7 +60,25 @@ struct TutorSourcePanel: View {
 
     @ViewBuilder
     private var content: some View {
-        if viewModel.viewMode == .text {
+        if viewModel.isAdaptiveQuestionPlaceholder {
+            VStack(spacing: 10) {
+                if viewModel.isGeneratingPracticeQuestion { ProgressView() }
+                Text(viewModel.isGeneratingPracticeQuestion
+                     ? viewModel.text("正在准备下一题…", "Preparing the next question…")
+                     : viewModel.text("未能生成下一题", "The next question could not be generated"))
+                    .font(.system(size: 14, weight: .medium))
+                Text(viewModel.isGeneratingPracticeQuestion
+                     ? viewModel.text("TutorClip 正在根据你的掌握情况选择题型和难度。", "TutorClip is choosing the question type and difficulty from your mastery.")
+                     : viewModel.text("可以重新生成，当前学习进度不会丢失。", "You can regenerate without losing current learning progress."))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                if !viewModel.isGeneratingPracticeQuestion {
+                    Button(viewModel.text("重试生成", "Regenerate")) { viewModel.retryLastRequest() }
+                        .buttonStyle(PrimaryCapsuleButtonStyle())
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if viewModel.viewMode == .text {
             VStack(spacing: 0) {
                 ocrFormatBanner
                 ocrQualityBanner
@@ -77,10 +105,12 @@ struct TutorSourcePanel: View {
             ForEach(TutorAction.sourceLeadingActions, id: \.self) { action in
                 Button(action.title(language: viewModel.language)) { viewModel.run(action: action) }
                     .buttonStyle(ChromeButtonStyle())
+                    .disabled(viewModel.isViewingQuestionSnapshot)
             }
             Spacer()
             ForEach(TutorAction.sourceTrailingActions, id: \.self) { action in
                 actionButton(action)
+                    .disabled(viewModel.isViewingQuestionSnapshot)
             }
         }
         .padding(.horizontal, 14)
@@ -90,7 +120,20 @@ struct TutorSourcePanel: View {
 
     @ViewBuilder
     private func actionButton(_ action: TutorAction) -> some View {
-        if action == .explainAll {
+        if action == .practiceSimilar {
+            Button { viewModel.run(action: action) } label: {
+                HStack(spacing: 6) {
+                    if viewModel.isGeneratingPracticeQuestion {
+                        ProgressView().controlSize(.small)
+                    }
+                    Text(viewModel.isGeneratingPracticeQuestion
+                         ? viewModel.text("正在出题…", "Generating…")
+                         : action.title(language: viewModel.language))
+                }
+            }
+            .buttonStyle(ChromeButtonStyle())
+            .disabled(viewModel.isGeneratingPracticeQuestion)
+        } else if action == .explainAll {
             Button(action.title(language: viewModel.language)) { viewModel.run(action: action) }
                 .buttonStyle(PrimaryCapsuleButtonStyle())
         } else {

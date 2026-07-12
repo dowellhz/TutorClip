@@ -63,8 +63,8 @@ struct OnboardingView: View {
             Text(language.text("欢迎使用 TutorClip", "Welcome to TutorClip"))
                 .font(.system(size: 28, weight: .bold))
             Text(language.text(
-                "TutorClip 是常驻菜单栏的 SAT 截图老师。完成下面三个设置后，就可以从任何题目页面直接开始学习。",
-                "TutorClip is a menu bar SAT screenshot tutor. Complete three quick settings to start learning from any question on screen."
+                "TutorClip 是会主动安排练习的 SAT 私教，也可以从任何题目页面截图提问。完成下面设置后即可开始。",
+                "TutorClip is an adaptive SAT tutor that also accepts questions from screenshots. Complete setup to begin."
             ))
             .font(.system(size: 15))
             .foregroundStyle(.secondary)
@@ -155,6 +155,16 @@ struct OnboardingView: View {
             Text(language.text("提示：macOS 更改屏幕录制权限后，可能需要重新启动 TutorClip。", "Tip: macOS may require restarting TutorClip after changing Screen Recording permission."))
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
+            setupBox {
+                Toggle(language.text("保存学习进度", "Save learning progress"), isOn: $viewModel.settings.learningProgressEnabled)
+                Toggle(language.text("保存题目和对话历史", "Save question and chat history"), isOn: $viewModel.settings.historyEnabled)
+                Text(language.text(
+                    "两项可以独立关闭。截图永不保存；学习进度只包含答题、掌握状态、复习日期和生词。",
+                    "These are independent. Screenshots are never saved; learning progress contains only answers, mastery, review dates, and vocabulary."
+                ))
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+            }
         }
     }
 

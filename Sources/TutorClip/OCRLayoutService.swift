@@ -7,7 +7,7 @@ struct OCRLayoutService {
         var tokens: [OCRToken] = []
         let lines = observation.document.text.lines.map { item in
             let box = item.boundingRegion.normalizedPath.boundingBox
-            let lineTokens = makeTokens(from: item.transcript, lineBox: box, confidence: item.confidence)
+            let lineTokens = makeTokens(from: item)
             tokens.append(contentsOf: lineTokens)
             return OCRLine(id: item.uuid, text: item.transcript, boundingBox: CodableRect(box), confidence: item.confidence, tokenIds: lineTokens.map(\.id))
         }
@@ -29,7 +29,11 @@ struct OCRLayoutService {
         for segment in transcriptSegments(from: observation.document.text) where !paragraphs.contains(where: { $0.text == segment.text }) {
             paragraphs.append(segment)
         }
-        return OCRDocument(id: UUID(), fullText: fullText, editedText: fullText, detectedLanguage: language.rawValue, createdAt: Date(), blocks: fullText.isEmpty ? [] : [block], lines: lines, tokens: tokens, tables: tables, documentTitle: title, paragraphs: paragraphs)
+        var document = OCRDocument(id: UUID(), fullText: fullText, editedText: fullText, detectedLanguage: language.rawValue, createdAt: Date(), blocks: fullText.isEmpty ? [] : [block], lines: lines, tokens: tokens, tables: tables, documentTitle: title, paragraphs: paragraphs)
+        document.recognitionCandidates = observation.document.text.lines.map { line in
+            line.topCandidates(5).map(\.string).joined(separator: " || ")
+        }
+        return document
     }
 
     private func transcriptSegments(from text: DocumentObservation.Container.Text) -> [OCRParagraph] {
@@ -45,17 +49,21 @@ struct OCRLayoutService {
         }
     }
 
-    private func makeTokens(from text: String, lineBox: CGRect, confidence: Float) -> [OCRToken] {
-        let words = text.split(whereSeparator: \.isWhitespace).map(String.init)
-        guard !words.isEmpty else { return [] }
-        let totalCharacters = max(words.reduce(0) { $0 + $1.count }, 1)
-        var offset: CGFloat = 0
-        return words.map { word in
-            let ratio = CGFloat(word.count) / CGFloat(totalCharacters)
-            let width = lineBox.width * ratio
-            let rect = CGRect(x: lineBox.minX + offset, y: lineBox.minY, width: width, height: lineBox.height)
-            offset += width
-            return OCRToken(id: UUID(), text: word, boundingBox: CodableRect(rect), confidence: confidence, isLikelyUnderlined: nil)
+    private func makeTokens(from observation: RecognizedTextObservation) -> [OCRToken] {
+        guard let recognized = observation.topCandidates(1).first else { return [] }
+        let text = recognized.string
+        return text.indices.compactMap { start -> OCRToken? in
+            let end = text.index(after: start)
+            let character = String(text[start..<end])
+            guard !character.allSatisfy(\.isWhitespace),
+                  let rectangle = recognized.boundingBox(for: start..<end) else { return nil }
+            return OCRToken(
+                id: UUID(),
+                text: character,
+                boundingBox: CodableRect(rectangle.boundingBox.cgRect),
+                confidence: recognized.confidence,
+                isLikelyUnderlined: nil
+            )
         }
     }
 }

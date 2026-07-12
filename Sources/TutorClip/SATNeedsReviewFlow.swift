@@ -2,7 +2,6 @@ import Foundation
 
 enum SATLearningGap: String, Codable, CaseIterable, Identifiable {
     case englishReading, comprehension, concept, application, explanationStillUnclear
-    case mathConcept, mathModeling, mathExecution, mathRepresentation
     case aiDiagnose
     var id: String { rawValue }
 
@@ -13,12 +12,21 @@ enum SATLearningGap: String, Codable, CaseIterable, Identifiable {
         case .concept: return language.text("不知道考点", "I don't know the skill")
         case .application: return language.text("知道考点但不会做", "I can't apply it")
         case .explanationStillUnclear: return language.text("看完解析还是不懂", "The explanation is unclear")
-        case .mathConcept: return language.text("公式或概念不会", "Formula or concept gap")
-        case .mathModeling: return language.text("不会列式或建模", "Can't model the problem")
-        case .mathExecution: return language.text("步骤或计算卡住", "Stuck on steps or calculation")
-        case .mathRepresentation: return language.text("图表或函数看不懂", "Can't read the graph or function")
         case .aiDiagnose: return language.text("不确定，让 AI 判断", "Let AI diagnose")
         }
+    }
+
+    init(from decoder: Decoder) throws {
+        let value = try decoder.singleValueContainer().decode(String.self)
+        switch value {
+        case "mathConcept", "mathModeling", "mathExecution", "mathRepresentation": self = .concept
+        default: self = SATLearningGap(rawValue: value) ?? .aiDiagnose
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
     }
 }
 
@@ -79,7 +87,12 @@ struct SATMicroCheck: Codable, Equatable {
         let choices = lines.compactMap(protocolChoice)
         var body = raw
         body.removeSubrange(start.lowerBound..<end.upperBound)
-        let check = question.isEmpty || choices.count < 2 || !"ABCD".contains(answer) ? nil : SATMicroCheck(question: question, choices: choices, correctAnswer: String(answer.prefix(1)))
+        let labels = choices.compactMap { $0.first.map(String.init) }
+        let check = question.isEmpty
+            || labels != ["A", "B", "C", "D"]
+            || !labels.contains(String(answer.prefix(1)))
+            ? nil
+            : SATMicroCheck(question: question, choices: choices, correctAnswer: String(answer.prefix(1)))
         return (check, body.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 

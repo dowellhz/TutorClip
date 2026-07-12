@@ -13,29 +13,32 @@ struct InteractiveQuestionMarkdownView: View {
     private var document: QuestionMarkdownDocument { QuestionMarkdownDocument(markdown: markdown) }
 
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 10) {
-                ForEach(document.blocks) { block in
-                    switch block.kind {
-                    case .text:
-                        PositionedSelectableMarkdownBlock(
-                            markdown: block.markdown,
-                            underlinedTexts: underlinedTexts,
-                            selectedText: $selectedText,
-                            selectionRect: $selectionRect
-                        )
-                    case .table(let table):
-                        InteractiveMarkdownTableBlock(
-                            table: table,
-                            language: language,
-                            onInteraction: onTableInteraction
-                        )
+        GeometryReader { geometry in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 10) {
+                    ForEach(document.blocks) { block in
+                        switch block.kind {
+                        case .text:
+                            PositionedSelectableMarkdownBlock(
+                                markdown: block.markdown,
+                                underlinedTexts: underlinedTexts,
+                                selectedText: $selectedText,
+                                selectionRect: $selectionRect
+                            )
+                        case .table(let table):
+                            InteractiveMarkdownTableBlock(
+                                table: table,
+                                language: language,
+                                onInteraction: onTableInteraction
+                            )
+                        }
                     }
                 }
+                .frame(width: max(1, geometry.size.width), alignment: .leading)
+                .padding(.vertical, 8)
             }
-            .padding(.vertical, 8)
+            .coordinateSpace(name: "question-document")
         }
-        .coordinateSpace(name: "question-document")
     }
 }
 
@@ -52,6 +55,7 @@ private struct PositionedSelectableMarkdownBlock: View {
             guard let localRect, !text.isEmpty else { selectionRect = nil; return }
             selectionRect = localRect.offsetBy(dx: frame.minX, dy: frame.minY)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background {
             GeometryReader { geometry in
                 Color.clear

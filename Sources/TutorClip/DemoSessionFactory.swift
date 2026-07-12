@@ -9,10 +9,10 @@ enum DemoSessionFactory {
         Researchers have found that small community gardens can improve neighborhood cohesion. Residents who work together to maintain shared plots often report stronger social ties and a greater sense of responsibility for public spaces.
 
         Which choice best states the main idea of the text?
-        A. Community gardens mainly benefit professional researchers.
-        B. Shared gardens can strengthen connections among local residents.
-        C. Public spaces are difficult for residents to maintain.
-        D. Urban neighborhoods rarely support shared projects.
+        A) Community gardens mainly benefit professional researchers.
+        B) Shared gardens can strengthen connections among local residents.
+        C) Public spaces are difficult for residents to maintain.
+        D) Urban neighborhoods rarely support shared projects.
         """
         let image = makeImage(text: text)
         let document = makeDocument(text: text)
@@ -27,6 +27,59 @@ enum DemoSessionFactory {
             category: .reading
         )
     }
+
+    #if DEBUG
+    static func makeUITest() -> TutorSession {
+        let session = make()
+        session.correctAnswer = "B"
+        session.learningMetadata.answerConfidence = 1
+        session.learningMetadata.isAIVerified = true
+        session.learningMetadata.isAIGenerated = true
+        session.learningMetadata.answerSubmissionOpen = true
+        session.learningMetadata.currentAttemptStartedAt = Date()
+        session.vocabularyCards = [
+            VocabularyCard(
+                id: UUID(),
+                term: "cohesion",
+                meaning: "凝聚力",
+                note: "the state of forming a united whole",
+                example: "Shared work can improve neighborhood cohesion.",
+                source: "neighborhood cohesion",
+                sourceSessionID: session.id
+            )
+        ]
+        return session
+    }
+
+    static func makeUITestNext() -> TutorSession {
+        let text = """
+        A writer wants to emphasize that a scientific result was unexpected.
+
+        Which choice most effectively accomplishes this goal?
+        A) Surprisingly, the second trial produced the opposite result.
+        B) The researchers completed a second trial.
+        C) The result was recorded in the laboratory notebook.
+        D) The trial occurred on Tuesday.
+        """
+        let session = TutorSession(
+            id: UUID(),
+            title: "Visible Test Next Question",
+            createdAt: Date(),
+            updatedAt: Date(),
+            ocrDocument: makeDocument(text: text),
+            messages: [],
+            screenshotInMemory: makeImage(text: text),
+            category: .writing
+        )
+        session.correctAnswer = "A"
+        session.learningMetadata.answerConfidence = 1
+        session.learningMetadata.isAIVerified = true
+        session.learningMetadata.isAIGenerated = true
+        session.learningMetadata.answerSubmissionOpen = true
+        session.learningMetadata.currentAttemptStartedAt = Date()
+        return session
+    }
+    #endif
 
     private static func makeDocument(text: String) -> OCRDocument {
         let linesText = text.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
