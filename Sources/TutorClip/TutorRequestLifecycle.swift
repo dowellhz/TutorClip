@@ -95,7 +95,27 @@ extension TutorViewModel {
         session.correctAnswer = verification?.answer
         session.learningMetadata.isAIVerified = verification != nil
         session.learningMetadata.answerConfidence = verification?.confidence
+        if let verifiedAnswer = verification?.answer {
+            replaceConflictingExplanationIfNeeded(verifiedAnswer: verifiedAnswer)
+        }
         RuntimeLog.write("answer-verification-background-applied answer=\(verification?.answer ?? "nil")")
+    }
+
+    private func replaceConflictingExplanationIfNeeded(verifiedAnswer: String) {
+        guard let summaryAnswer = answerSummary?.choiceLetter,
+              summaryAnswer != verifiedAnswer,
+              let index = session.messages.lastIndex(where: {
+                  $0.role == .assistant && $0.actionType == .explainAll
+              })
+        else { return }
+
+        answerSummary = nil
+        session.messages[index].content = text(
+            "这段讲解与后台答案校验冲突，正在按已验证答案重新生成。",
+            "This explanation conflicted with background answer verification and is being regenerated."
+        )
+        RuntimeLog.write("explanation-replaced verified=\(verifiedAnswer) summary=\(summaryAnswer)")
+        send(action: .explainAll, question: nil)
     }
 
     private func answerChoicesMatch(_ first: String, _ second: String) -> Bool {
