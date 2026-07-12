@@ -41,22 +41,18 @@ extension TutorViewModel {
         let requiresCrossCheck = OCRConfidenceAssessment.shouldWarn(confidences: session.ocrDocument.lines.map(\.confidence))
             || TutorQuestionParsing.answerChoices(from: question).count != 4
             || isHighRiskInference
-        let timeoutNanoseconds: UInt64 = requiresCrossCheck ? 45_000_000_000 : 15_000_000_000
         answerVerificationTask?.cancel()
         let startedAt = Date()
         let task = Task { [deepSeekClient, promptBuilder] in
-            let outcome = await AsyncTimeoutRace.run(timeoutNanoseconds: timeoutNanoseconds) {
-                try? await AnswerVerificationService(client: deepSeekClient, promptBuilder: promptBuilder)
+            do {
+                let result = try await AnswerVerificationService(client: deepSeekClient, promptBuilder: promptBuilder)
                     .verify(question: question, requiresCrossCheck: requiresCrossCheck)
-            }
-            switch outcome {
-            case .value(let result):
                 PipelineTimingMetrics.record(stage: "Pro answer verification", duration: Date().timeIntervalSince(startedAt))
                 return result
-            case .timedOut:
-                RuntimeLog.write("answer-verification-timeout seconds=\(timeoutNanoseconds / 1_000_000_000)")
+            } catch is CancellationError {
                 return nil
-            case .cancelled:
+            } catch {
+                RuntimeLog.write("answer-verification-background-failed \(error.localizedDescription)")
                 return nil
             }
         }
