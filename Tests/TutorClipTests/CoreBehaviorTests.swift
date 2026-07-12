@@ -348,7 +348,7 @@ final class CoreBehaviorTests: XCTestCase {
             "ANSWER_VERIFICATION\nAnswer: A\nConfidence: 0.91\nEvidence: France and US separate most between 1900 and 1950.\nEND_ANSWER_VERIFICATION"
         ])
         let accepted = try await AnswerVerificationService(client: agreeing, promptBuilder: PromptBuilder())
-            .verify(question: "Question?\n\nA) One\n\nB) Two")
+            .verify(question: "Question?\n\nA) One\n\nB) Two", requiresCrossCheck: true)
         XCTAssertEqual(accepted?.answer, "A")
 
         let conflicting = SequenceDeepSeekStreamer(responses: [
@@ -356,8 +356,18 @@ final class CoreBehaviorTests: XCTestCase {
             "ANSWER_VERIFICATION\nAnswer: B\nConfidence: 0.93\nEvidence: Evidence B.\nEND_ANSWER_VERIFICATION"
         ])
         let rejected = try await AnswerVerificationService(client: conflicting, promptBuilder: PromptBuilder())
-            .verify(question: "Question?\n\nA) One\n\nB) Two")
+            .verify(question: "Question?\n\nA) One\n\nB) Two", requiresCrossCheck: true)
         XCTAssertNil(rejected)
+    }
+
+    @MainActor
+    func testAnswerVerificationUsesOneProRequestForClearQuestion() async throws {
+        let streamer = SequenceDeepSeekStreamer(responses: [
+            "ANSWER_VERIFICATION\nAnswer: A\nConfidence: 0.94\nEvidence: The chronology directly supports A.\nEND_ANSWER_VERIFICATION"
+        ])
+        let result = try await AnswerVerificationService(client: streamer, promptBuilder: PromptBuilder())
+            .verify(question: "Question?\n\nA) One\n\nB) Two")
+        XCTAssertEqual(result?.answer, "A")
     }
 
     @MainActor

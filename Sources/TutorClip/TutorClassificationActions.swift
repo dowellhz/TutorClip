@@ -2,13 +2,18 @@ import Foundation
 
 @MainActor
 extension TutorViewModel {
-    func classifyQuestionCategoryWithAI(_ text: String) async {
+    func classifyQuestionCategoryWithAI(_ text: String, sessionID: UUID? = nil) async {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         var raw = ""
         do {
-            try await deepSeekClient.stream(messages: promptBuilder.classifyQuestionPrompt(text: text)) { token in
+            try await deepSeekClient.stream(
+                messages: promptBuilder.classifyQuestionPrompt(text: text),
+                temperatureOverride: nil,
+                modelOverride: DeepSeekModel.flash.rawValue
+            ) { token in
                 raw += token
             }
+            guard sessionID == nil || self.session.id == sessionID else { return }
             let category = TutorQuestionParsing.category(fromAI: raw)
             if category != .unknown {
                 session.category = category
@@ -21,6 +26,12 @@ extension TutorViewModel {
             RuntimeLog.write("question-category-ai-cancelled")
         } catch {
             RuntimeLog.write("question-category-ai-error \(error.localizedDescription)")
+        }
+    }
+
+    func classifyOCRQuestionInBackground(_ text: String, sessionID: UUID) {
+        Task { [weak self] in
+            await self?.classifyQuestionCategoryWithAI(text, sessionID: sessionID)
         }
     }
 

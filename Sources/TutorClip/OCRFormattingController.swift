@@ -70,10 +70,6 @@ extension TutorViewModel {
                 session.selectedAnswer = nil
                 TutorSessionMutation.updateFullText(cleaned, in: session)
                 RuntimeLog.writeTextMetrics("format-ocr-document-after-fulltext", session.ocrDocument.editedText)
-                if parsed.category == nil {
-                    await classifyQuestionCategoryWithAI(cleaned)
-                    try Task.checkCancellation()
-                }
                 ocrFormatState = .applied
                 applyPreflightVerification(
                     preflightVerification,
@@ -81,6 +77,9 @@ extension TutorViewModel {
                     formattedQuestion: cleaned,
                     sessionID: sessionID
                 )
+                if parsed.category == nil {
+                    classifyOCRQuestionInBackground(cleaned, sessionID: sessionID)
+                }
                 RuntimeLog.write("format-ocr-applied")
             } catch is CancellationError {
                 RuntimeLog.write("format-ocr-cancelled")
@@ -101,9 +100,7 @@ private struct GrammarBlankAuditor {
     func audit(document: OCRDocument, candidate: String) async throws -> String {
         let normalized = candidate.lowercased()
         let isSATBlankQuestion = normalized.contains("conventions of standard english")
-            || normalized.contains("complete the text so that it conforms")
-            || normalized.contains("completes the text")
-            || normalized.contains("complete the text?")
+            || normalized.contains("conforms to the conventions")
         let addedEmDash = candidate.filter({ $0 == "—" }).count > document.editedText.filter({ $0 == "—" }).count
         guard isSATBlankQuestion || (candidate.contains("—") && addedEmDash) else {
             return candidate

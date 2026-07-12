@@ -37,12 +37,16 @@ struct AnswerVerificationService {
     let client: any DeepSeekStreaming
     let promptBuilder: PromptBuilder
 
-    func verify(question: String) async throws -> AnswerVerification? {
+    func verify(question: String, requiresCrossCheck: Bool = false) async throws -> AnswerVerification? {
         guard TutorQuestionParsing.answerChoices(from: question).count >= 2 else { return nil }
         let solver = try await request(promptBuilder.answerSolverPrompt(question: question))
         guard let solver, solver.confidence >= 0.8 else {
             RuntimeLog.write("answer-verification-unverified stage=solver")
             return nil
+        }
+        guard requiresCrossCheck else {
+            RuntimeLog.write("answer-verification-passed answer=\(solver.answer) mode=single")
+            return solver
         }
         let critic = try await request(promptBuilder.answerCriticPrompt(question: question, proposal: solver))
         guard let critic,

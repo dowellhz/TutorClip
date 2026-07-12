@@ -35,11 +35,13 @@ extension TutorViewModel {
 
     func beginAnswerVerification(for question: String) -> Task<AnswerVerification?, Never>? {
         guard TutorQuestionParsing.answerChoices(from: question).count >= 2 else { return nil }
+        let requiresCrossCheck = OCRConfidenceAssessment.shouldWarn(confidences: session.ocrDocument.lines.map(\.confidence))
+            || TutorQuestionParsing.answerChoices(from: question).count != 4
         answerVerificationTask?.cancel()
         let task = Task { [deepSeekClient, promptBuilder] in
             do {
                 return try await AnswerVerificationService(client: deepSeekClient, promptBuilder: promptBuilder)
-                    .verify(question: question)
+                    .verify(question: question, requiresCrossCheck: requiresCrossCheck)
             } catch is CancellationError {
                 return nil
             } catch {
