@@ -5,6 +5,7 @@ protocol DeepSeekStreaming {
     func stream(messages: [DeepSeekMessage], onToken: @escaping @MainActor (String) -> Void) async throws
     func stream(messages: [DeepSeekMessage], temperatureOverride: Double?, onToken: @escaping @MainActor (String) -> Void) async throws
     func stream(messages: [DeepSeekMessage], temperatureOverride: Double?, modelOverride: String?, onToken: @escaping @MainActor (String) -> Void) async throws
+    func stream(messages: [DeepSeekMessage], temperatureOverride: Double?, modelOverride: String?, reasoningEffortOverride: DeepSeekReasoningEffort?, onToken: @escaping @MainActor (String) -> Void) async throws
 }
 
 extension DeepSeekStreaming {
@@ -15,6 +16,15 @@ extension DeepSeekStreaming {
     func stream(messages: [DeepSeekMessage], temperatureOverride: Double?, modelOverride: String?, onToken: @escaping @MainActor (String) -> Void) async throws {
         try await stream(messages: messages, temperatureOverride: temperatureOverride, onToken: onToken)
     }
+
+    func stream(messages: [DeepSeekMessage], temperatureOverride: Double?, modelOverride: String?, reasoningEffortOverride: DeepSeekReasoningEffort?, onToken: @escaping @MainActor (String) -> Void) async throws {
+        try await stream(messages: messages, temperatureOverride: temperatureOverride, modelOverride: modelOverride, onToken: onToken)
+    }
+}
+
+enum DeepSeekReasoningEffort: String, Codable {
+    case high
+    case max
 }
 
 enum DeepSeekError: LocalizedError {
@@ -59,6 +69,10 @@ final class DeepSeekClient: DeepSeekStreaming {
     }
 
     func stream(messages: [DeepSeekMessage], temperatureOverride: Double?, modelOverride: String?, onToken: @escaping @MainActor (String) -> Void) async throws {
+        try await stream(messages: messages, temperatureOverride: temperatureOverride, modelOverride: modelOverride, reasoningEffortOverride: nil, onToken: onToken)
+    }
+
+    func stream(messages: [DeepSeekMessage], temperatureOverride: Double?, modelOverride: String?, reasoningEffortOverride: DeepSeekReasoningEffort?, onToken: @escaping @MainActor (String) -> Void) async throws {
         let config = configLoader.currentConfig(settings: settingsStore.settings)
         let language = settingsStore.settings.appLanguage
         guard let apiKey = config.apiKey, !apiKey.isEmpty else {
@@ -80,7 +94,8 @@ final class DeepSeekClient: DeepSeekStreaming {
             messages: messages,
             temperature: temperatureOverride ?? settingsStore.settings.temperature,
             stream: true,
-            thinking: model == DeepSeekModel.flash.rawValue ? .disabled : nil
+            thinking: model == DeepSeekModel.flash.rawValue ? .disabled : nil,
+            reasoningEffort: reasoningEffortOverride
         )
         request.httpBody = try JSONEncoder().encode(body)
 
@@ -204,6 +219,12 @@ private struct DeepSeekRequest: Codable {
     var temperature: Double
     var stream: Bool
     var thinking: Thinking?
+    var reasoningEffort: DeepSeekReasoningEffort?
+
+    enum CodingKeys: String, CodingKey {
+        case model, messages, temperature, stream, thinking
+        case reasoningEffort = "reasoning_effort"
+    }
 }
 
 private struct DeepSeekStreamEvent: Codable {

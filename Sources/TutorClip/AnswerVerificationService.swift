@@ -39,7 +39,8 @@ struct AnswerVerificationService {
 
     func verify(question: String, requiresCrossCheck: Bool = false) async throws -> AnswerVerification? {
         guard TutorQuestionParsing.answerChoices(from: question).count >= 2 else { return nil }
-        let solver = try await request(promptBuilder.answerSolverPrompt(question: question))
+        let effort: DeepSeekReasoningEffort = requiresCrossCheck ? .max : .high
+        let solver = try await request(promptBuilder.answerSolverPrompt(question: question), effort: effort)
         guard let solver, solver.confidence >= 0.8 else {
             RuntimeLog.write("answer-verification-unverified stage=solver")
             return nil
@@ -48,7 +49,7 @@ struct AnswerVerificationService {
             RuntimeLog.write("answer-verification-passed answer=\(solver.answer) mode=single")
             return solver
         }
-        let critic = try await request(promptBuilder.answerCriticPrompt(question: question, proposal: solver))
+        let critic = try await request(promptBuilder.answerCriticPrompt(question: question, proposal: solver), effort: effort)
         guard let critic,
               critic.confidence >= 0.8,
               critic.answer == solver.answer else {
@@ -63,13 +64,14 @@ struct AnswerVerificationService {
         )
     }
 
-    private func request(_ messages: [DeepSeekMessage]) async throws -> AnswerVerification? {
+    private func request(_ messages: [DeepSeekMessage], effort: DeepSeekReasoningEffort) async throws -> AnswerVerification? {
         var response = ""
         do {
             try await client.stream(
                 messages: messages,
                 temperatureOverride: 0,
-                modelOverride: DeepSeekModel.pro.rawValue
+                modelOverride: DeepSeekModel.pro.rawValue,
+                reasoningEffortOverride: effort
             ) { response += $0 }
             try Task.checkCancellation()
             return AnswerVerification.parse(response)
