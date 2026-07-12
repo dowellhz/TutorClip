@@ -24,6 +24,10 @@ extension TutorViewModel {
         TutorQuestionParsing.answerChoices(from: session.ocrDocument.editedText)
     }
 
+    var isAnswerVerificationInProgress: Bool {
+        answerVerificationTask != nil
+    }
+
     var answerSelectionResult: TutorSessionMutation.AnswerSelectionResult? {
         TutorSessionMutation.answerSelectionResult(
             selected: session.selectedAnswer,

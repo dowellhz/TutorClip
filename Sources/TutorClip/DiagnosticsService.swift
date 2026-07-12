@@ -25,7 +25,7 @@ enum DiagnosticsService {
             visionItem(settings.ocrLanguage, language: language),
             historyDirectoryItem(language: language),
             screenshotPersistenceItem(language: language)
-        ]
+        ] + PipelineTimingMetrics.diagnosticItems(language: language)
     }
 
     static func runWithCaptureProbe(settings: AppSettings, shortcut: ShortcutRegistrationResult, config: DeepSeekConfig) async -> [DiagnosticItem] {
@@ -153,5 +153,37 @@ enum DiagnosticsService {
             state: .pass,
             detail: language.text("未发现截图文件。", "No screenshot files found.")
         )
+    }
+}
+
+enum PipelineTimingMetrics {
+    private static let lock = NSLock()
+    private static var latest: [String: TimeInterval] = [:]
+
+    static func record(stage: String, duration: TimeInterval) {
+        lock.lock()
+        latest[stage] = duration
+        lock.unlock()
+    }
+
+    static func diagnosticItems(language: AppLanguage) -> [DiagnosticItem] {
+        lock.lock()
+        let snapshot = latest
+        lock.unlock()
+        guard !snapshot.isEmpty else {
+            return [DiagnosticItem(
+                title: language.text("最近链路耗时", "Recent Pipeline Timing"),
+                state: .warn,
+                detail: language.text("完成一次截图识题后会显示各阶段耗时。", "Stage timings appear after one screenshot question.")
+            )]
+        }
+        return snapshot.keys.sorted().map { stage in
+            let seconds = snapshot[stage] ?? 0
+            return DiagnosticItem(
+                title: language == .chinese ? stage.replacingOccurrences(of: "Local Vision OCR", with: "本地 Vision OCR").replacingOccurrences(of: "Flash OCR formatting", with: "Flash OCR 排版").replacingOccurrences(of: "Pro answer verification", with: "Pro 答案校验") : stage,
+                state: seconds > 20 ? .warn : .pass,
+                detail: language.text("最近一次：\(seconds.formatted(.number.precision(.fractionLength(1)))) 秒", "Latest: \(seconds.formatted(.number.precision(.fractionLength(1)))) s")
+            )
+        }
     }
 }

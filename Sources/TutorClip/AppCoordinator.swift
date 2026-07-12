@@ -163,12 +163,14 @@ final class AppCoordinator: ObservableObject {
         let session = TutorSession.newSession(screenshot: image)
         openTutorWindow(session: session, isLoadingOCR: true, near: selectionRect)
         let language = settingsStore.settings.ocrLanguage
+        let ocrStartedAt = Date()
         ocrRequestLifecycle.start(sessionID: session.id) { [ocrService] in
             RuntimeLog.write("ocr-start")
             return await ocrService.recognize(image: image, language: language)
         } onResult: { [weak self, weak session] document in
             guard let self, let session else { return }
             RuntimeLog.write("ocr-finished lines=\(document.lines.count) appActive=\(NSApp.isActive)")
+            PipelineTimingMetrics.record(stage: "Local Vision OCR", duration: Date().timeIntervalSince(ocrStartedAt))
             session.ocrDocument = document
             session.title = SessionTitle.make(from: document.editedText)
             session.category = SessionCategory.infer(from: document.editedText)

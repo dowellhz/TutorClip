@@ -286,7 +286,15 @@ struct AnswerChoiceControl: View {
 
     @ViewBuilder
     private var resultText: some View {
-        if let result = viewModel.answerSelectionResult {
+        if viewModel.isAnswerVerificationInProgress {
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text(viewModel.text("答案校验中", "Verifying answer"))
+            }
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .accessibilityIdentifier("answer.result.verifying")
+        } else if let result = viewModel.answerSelectionResult {
             switch result {
             case .correct:
                 Text(viewModel.text("正确", "Correct"))

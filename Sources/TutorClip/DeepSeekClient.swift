@@ -75,7 +75,7 @@ final class DeepSeekClient: DeepSeekStreaming {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         let body = DeepSeekRequest(
-            model: modelOverride ?? config.model,
+            model: modelOverride ?? DeepSeekModel.flash.rawValue,
             messages: messages,
             temperature: temperatureOverride ?? settingsStore.settings.temperature,
             stream: true

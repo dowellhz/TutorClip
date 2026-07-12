@@ -42,10 +42,13 @@ extension TutorViewModel {
             || TutorQuestionParsing.answerChoices(from: question).count != 4
             || isHighRiskInference
         answerVerificationTask?.cancel()
+        let startedAt = Date()
         let task = Task { [deepSeekClient, promptBuilder] in
             do {
-                return try await AnswerVerificationService(client: deepSeekClient, promptBuilder: promptBuilder)
+                let result = try await AnswerVerificationService(client: deepSeekClient, promptBuilder: promptBuilder)
                     .verify(question: question, requiresCrossCheck: requiresCrossCheck)
+                PipelineTimingMetrics.record(stage: "Pro answer verification", duration: Date().timeIntervalSince(startedAt))
+                return result
             } catch is CancellationError {
                 return nil
             } catch {
@@ -96,6 +99,12 @@ extension TutorViewModel {
     }
 
     private func answerChoicesMatch(_ first: String, _ second: String) -> Bool {
-        TutorQuestionParsing.answerChoices(from: first) == TutorQuestionParsing.answerChoices(from: second)
+        let normalize: (String) -> String = { choice in
+            choice.lowercased()
+                .split(whereSeparator: { $0.isWhitespace })
+                .joined(separator: " ")
+        }
+        return TutorQuestionParsing.answerChoices(from: first).map(normalize)
+            == TutorQuestionParsing.answerChoices(from: second).map(normalize)
     }
 }
